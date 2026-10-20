@@ -1,0 +1,378 @@
+{
+  "status": "PASS",
+  "datasets": {
+    "tn_routes_context.csv": {
+      "row_count": 14,
+      "col_count": 10,
+      "duplicates": 0,
+      "null_counts": {},
+      "numeric_columns": [
+        "approx_distance_km_synthetic",
+        "assumed_bus_capacity",
+        "base_demand_factor_synthetic"
+      ],
+      "categorical_columns": [
+        "route_id",
+        "city_or_origin_city",
+        "origin_terminal_or_area",
+        "destination_terminal_or_area",
+        "corridor_type",
+        "data_type",
+        "data_source_note"
+      ],
+      "columns": [
+        "route_id",
+        "city_or_origin_city",
+        "origin_terminal_or_area",
+        "destination_terminal_or_area",
+        "corridor_type",
+        "approx_distance_km_synthetic",
+        "assumed_bus_capacity",
+        "base_demand_factor_synthetic",
+        "data_type",
+        "data_source_note"
+      ]
+    },
+    "seasonal_scenarios.csv": {
+      "row_count": 9,
+      "col_count": 9,
+      "duplicates": 0,
+      "null_counts": {},
+      "numeric_columns": [
+        "synthetic_demand_multiplier_assumption",
+        "synthetic_delay_multiplier_assumption"
+      ],
+      "categorical_columns": [
+        "scenario_name",
+        "start_date_synthetic",
+        "end_date_synthetic",
+        "scenario_description",
+        "data_type",
+        "data_source_note",
+        "combination_rule"
+      ],
+      "columns": [
+        "scenario_name",
+        "start_date_synthetic",
+        "end_date_synthetic",
+        "scenario_description",
+        "data_type",
+        "data_source_note",
+        "synthetic_demand_multiplier_assumption",
+        "synthetic_delay_multiplier_assumption",
+        "combination_rule"
+      ]
+    },
+    "disruption_scenarios.csv": {
+      "row_count": 3,
+      "col_count": 8,
+      "duplicates": 0,
+      "null_counts": {},
+      "numeric_columns": [
+        "delay_multiplier_synthetic",
+        "demand_multiplier_synthetic"
+      ],
+      "categorical_columns": [
+        "disruption_scenario",
+        "start_date_synthetic",
+        "end_date_synthetic",
+        "data_type",
+        "data_source_note",
+        "combination_rule"
+      ],
+      "columns": [
+        "disruption_scenario",
+        "start_date_synthetic",
+        "end_date_synthetic",
+        "delay_multiplier_synthetic",
+        "demand_multiplier_synthetic",
+        "data_type",
+        "data_source_note",
+        "combination_rule"
+      ]
+    },
+    "tn_trip_delay_scenarios.csv": {
+      "row_count": 37230,
+      "col_count": 20,
+      "duplicates": 0,
+      "null_counts": {
+        "scheduled_headway_min_synthetic": 5110,
+        "actual_headway_min_synthetic": 5110
+      },
+      "numeric_columns": [
+        "departure_delay_min_synthetic",
+        "peak_period_flag_synthetic",
+        "severe_delay_scenario_flag",
+        "hour",
+        "scheduled_headway_min_synthetic",
+        "actual_headway_min_synthetic",
+        "bunching_event_label_synthetic"
+      ],
+      "categorical_columns": [
+        "trip_id",
+        "date",
+        "route_id",
+        "city_or_origin_city",
+        "origin_terminal_or_area",
+        "destination_terminal_or_area",
+        "bus_id_synthetic",
+        "scheduled_departure_synthetic",
+        "simulated_actual_departure",
+        "seasonal_scenario_name",
+        "disruption_scenario_name",
+        "data_type",
+        "data_source_note"
+      ],
+      "columns": [
+        "trip_id",
+        "date",
+        "route_id",
+        "city_or_origin_city",
+        "origin_terminal_or_area",
+        "destination_terminal_or_area",
+        "bus_id_synthetic",
+        "scheduled_departure_synthetic",
+        "simulated_actual_departure",
+        "departure_delay_min_synthetic",
+        "peak_period_flag_synthetic",
+        "seasonal_scenario_name",
+        "disruption_scenario_name",
+        "severe_delay_scenario_flag",
+        "data_type",
+        "data_source_note",
+        "hour",
+        "scheduled_headway_min_synthetic",
+        "actual_headway_min_synthetic",
+        "bunching_event_label_synthetic"
+      ]
+    },
+    "tn_hourly_passenger_demand.csv": {
+      "row_count": 91980,
+      "col_count": 24,
+      "duplicates": 0,
+      "null_counts": {},
+      "numeric_columns": [
+        "month",
+        "hour",
+        "is_weekend",
+        "is_summer_vacation_scenario",
+        "passenger_count_synthetic",
+        "assumed_bus_capacity",
+        "demand_generation_factor_synthetic",
+        "active_seasonal_scenario_count_synthetic",
+        "active_disruption_scenario_count_synthetic"
+      ],
+      "categorical_columns": [
+        "date",
+        "day_of_week",
+        "route_id",
+        "city_or_origin_city",
+        "origin_terminal_or_area",
+        "destination_terminal_or_area",
+        "corridor_type",
+        "hour_label",
+        "seasonal_scenario_name",
+        "disruption_scenario_name",
+        "data_type",
+        "data_source_note",
+        "active_seasonal_scenarios_synthetic",
+        "active_disruption_scenarios_synthetic",
+        "scenario_combination_rule"
+      ],
+      "columns": [
+        "date",
+        "day_of_week",
+        "month",
+        "route_id",
+        "city_or_origin_city",
+        "origin_terminal_or_area",
+        "destination_terminal_or_area",
+        "corridor_type",
+        "hour",
+        "hour_label",
+        "is_weekend",
+        "is_summer_vacation_scenario",
+        "seasonal_scenario_name",
+        "disruption_scenario_name",
+        "passenger_count_synthetic",
+        "assumed_bus_capacity",
+        "demand_generation_factor_synthetic",
+        "data_type",
+        "data_source_note",
+        "active_seasonal_scenarios_synthetic",
+        "active_disruption_scenarios_synthetic",
+        "active_seasonal_scenario_count_synthetic",
+        "active_disruption_scenario_count_synthetic",
+        "scenario_combination_rule"
+      ]
+    },
+    "tn_route_hour_model_data.csv": {
+      "row_count": 91980,
+      "col_count": 35,
+      "duplicates": 0,
+      "null_counts": {
+        "bunching_risk_label_synthetic": 54750,
+        "passenger_count_next_hour_synthetic": 5110
+      },
+      "numeric_columns": [
+        "month",
+        "hour",
+        "is_weekend",
+        "is_summer_vacation_scenario",
+        "passenger_count_synthetic",
+        "assumed_bus_capacity",
+        "buses_scheduled_synthetic",
+        "total_capacity_available_synthetic",
+        "capacity_pressure_ratio_synthetic",
+        "delay_proxy_min_synthetic",
+        "left_behind_count_synthetic",
+        "active_seasonal_scenario_count_synthetic",
+        "active_disruption_scenario_count_synthetic",
+        "trip_count_synthetic",
+        "mean_departure_delay_min_synthetic",
+        "max_departure_delay_min_synthetic",
+        "severe_delay_trip_count_synthetic",
+        "mean_scheduled_headway_min_synthetic",
+        "min_scheduled_headway_min_synthetic",
+        "bunching_risk_label_synthetic",
+        "has_trip_in_hour_synthetic",
+        "left_behind_flag_synthetic",
+        "passenger_count_next_hour_synthetic"
+      ],
+      "categorical_columns": [
+        "date",
+        "day_of_week",
+        "route_id",
+        "city_or_origin_city",
+        "corridor_type",
+        "seasonal_scenario_name",
+        "disruption_scenario_name",
+        "data_type",
+        "data_source_note",
+        "active_seasonal_scenarios_synthetic",
+        "active_disruption_scenarios_synthetic",
+        "scenario_combination_rule"
+      ],
+      "columns": [
+        "date",
+        "day_of_week",
+        "month",
+        "route_id",
+        "city_or_origin_city",
+        "corridor_type",
+        "hour",
+        "is_weekend",
+        "is_summer_vacation_scenario",
+        "seasonal_scenario_name",
+        "disruption_scenario_name",
+        "passenger_count_synthetic",
+        "assumed_bus_capacity",
+        "buses_scheduled_synthetic",
+        "total_capacity_available_synthetic",
+        "capacity_pressure_ratio_synthetic",
+        "delay_proxy_min_synthetic",
+        "left_behind_count_synthetic",
+        "data_type",
+        "data_source_note",
+        "active_seasonal_scenarios_synthetic",
+        "active_disruption_scenarios_synthetic",
+        "active_seasonal_scenario_count_synthetic",
+        "active_disruption_scenario_count_synthetic",
+        "scenario_combination_rule",
+        "trip_count_synthetic",
+        "mean_departure_delay_min_synthetic",
+        "max_departure_delay_min_synthetic",
+        "severe_delay_trip_count_synthetic",
+        "mean_scheduled_headway_min_synthetic",
+        "min_scheduled_headway_min_synthetic",
+        "bunching_risk_label_synthetic",
+        "has_trip_in_hour_synthetic",
+        "left_behind_flag_synthetic",
+        "passenger_count_next_hour_synthetic"
+      ]
+    },
+    "tn_allocation_scenarios.csv": {
+      "row_count": 91980,
+      "col_count": 22,
+      "duplicates": 0,
+      "null_counts": {},
+      "numeric_columns": [
+        "hour",
+        "passenger_count_synthetic",
+        "assumed_bus_capacity",
+        "current_buses_scheduled_synthetic",
+        "minimum_service_buses_assumed",
+        "active_seasonal_scenario_count_synthetic",
+        "active_disruption_scenario_count_synthetic",
+        "simulated_recommended_buses",
+        "reallocation_delta_synthetic",
+        "buses_needed_for_demand_estimate_synthetic"
+      ],
+      "categorical_columns": [
+        "date",
+        "route_id",
+        "city_or_origin_city",
+        "origin_terminal_or_area",
+        "destination_terminal_or_area",
+        "seasonal_scenario_name",
+        "disruption_scenario_name",
+        "data_type",
+        "data_source_note",
+        "active_seasonal_scenarios_synthetic",
+        "active_disruption_scenarios_synthetic",
+        "scenario_combination_rule"
+      ],
+      "columns": [
+        "date",
+        "hour",
+        "route_id",
+        "city_or_origin_city",
+        "origin_terminal_or_area",
+        "destination_terminal_or_area",
+        "passenger_count_synthetic",
+        "assumed_bus_capacity",
+        "current_buses_scheduled_synthetic",
+        "minimum_service_buses_assumed",
+        "seasonal_scenario_name",
+        "disruption_scenario_name",
+        "data_type",
+        "data_source_note",
+        "active_seasonal_scenarios_synthetic",
+        "active_disruption_scenarios_synthetic",
+        "active_seasonal_scenario_count_synthetic",
+        "active_disruption_scenario_count_synthetic",
+        "scenario_combination_rule",
+        "simulated_recommended_buses",
+        "reallocation_delta_synthetic",
+        "buses_needed_for_demand_estimate_synthetic"
+      ]
+    }
+  },
+  "consistency_checks": {
+    "route_ids_consistent": true,
+    "total_unique_routes": 14,
+    "fleet_conservation_mismatches": 0,
+    "minimum_service_violations": 0
+  },
+  "target_distributions": {
+    "bunching_event_label_trip": {
+      "0": 36820,
+      "1": 410,
+      "positive_rate": 0.0110126242277733
+    },
+    "passenger_count_next_hour": {
+      "valid_count": 86870,
+      "missing_count": 5110,
+      "mean": 22.301542534822147,
+      "std": 11.778923037806384,
+      "min": 0.0,
+      "max": 93.0
+    },
+    "left_behind_flag": {
+      "0": 91776,
+      "1": 204,
+      "positive_rate": 0.002217873450750163
+    }
+  },
+  "anomalies_detected": []
+}

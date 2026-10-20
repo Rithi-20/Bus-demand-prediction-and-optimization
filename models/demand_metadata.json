@@ -1,0 +1,48 @@
+{
+  "model_type": "RandomForestRegressor",
+  "cutoff_date": "2026-10-20",
+  "train_samples": 69496,
+  "test_samples": 17374,
+  "mae": 4.3742658877316165,
+  "rmse": 6.24264542020006,
+  "r2": 0.8001834425632179,
+  "baseline_mae": 7.570104754230459,
+  "baseline_rmse": 10.223143479345591,
+  "baseline_r2": 0.46412555248349074,
+  "mae_improvement_pct": 42.21657388179322,
+  "rmse_improvement_pct": 38.936145884947834,
+  "top_feature_importance": {
+    "passenger_count_synthetic": 0.5461087708624014,
+    "hour": 0.20793369628817332,
+    "corridor_type_Regional commuter": 0.032608625478169506,
+    "total_capacity_available_synthetic": 0.029084735960750674,
+    "buses_scheduled_synthetic": 0.027749077887685093,
+    "corridor_type_Intercity": 0.02459044029329262,
+    "is_weekend": 0.015420601215704549,
+    "month": 0.014078618595254338,
+    "active_seasonal_scenario_count_synthetic": 0.007689620221485969,
+    "seasonal_scenario_name_none": 0.006953539767204492,
+    "route_id_TN08": 0.006592729413206393,
+    "corridor_type_Intercity/pilgrimage": 0.00619726687672609,
+    "route_id_TN07": 0.004687868442561321,
+    "route_id_TN14": 0.004399844598602478,
+    "corridor_type_Regional/pilgrimage": 0.004206492653441986
+  },
+  "numeric_features": [
+    "hour",
+    "month",
+    "is_weekend",
+    "passenger_count_synthetic",
+    "buses_scheduled_synthetic",
+    "assumed_bus_capacity",
+    "total_capacity_available_synthetic",
+    "active_seasonal_scenario_count_synthetic"
+  ],
+  "categorical_features": [
+    "route_id",
+    "day_of_week",
+    "corridor_type",
+    "seasonal_scenario_name",
+    "disruption_scenario_name"
+  ]
+}

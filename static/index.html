@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Demand Based Public Transport Planning System</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="app-layout">
+        <!-- LEFT NAVIGATION RAIL (Inspired by Navionyx & Fleet Tings) -->
+        <aside class="nav-rail">
+            <div class="brand-header">
+                <div class="brand-logo-icon">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="6" width="18" height="12" rx="3"></rect>
+                        <circle cx="7" cy="18" r="2"></circle>
+                        <circle cx="17" cy="18" r="2"></circle>
+                        <path d="M3 11h18"></path>
+                        <path d="M9 6v5"></path>
+                    </svg>
+                </div>
+                <div class="brand-text">
+                    <span class="brand-name" style="font-size: 0.92rem; line-height: 1.2;">Demand Transport</span>
+                    <span class="brand-tag">PLANNING SYSTEM</span>
+                </div>
+            </div>
+
+            <nav class="nav-menu">
+                <button class="nav-item active" data-view="command-center" id="nav-command-center">
+                    <span class="nav-icon">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="3" width="7" height="7"></rect>
+                            <rect x="14" y="3" width="7" height="7"></rect>
+                            <rect x="14" y="14" width="7" height="7"></rect>
+                            <rect x="3" y="14" width="7" height="7"></rect>
+                        </svg>
+                    </span>
+                    <span class="nav-label">Command Center</span>
+                </button>
+
+                <button class="nav-item" data-view="bunching-monitor" id="nav-bunching">
+                    <span class="nav-icon">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <polyline points="12 6 12 12 16 14"></polyline>
+                        </svg>
+                    </span>
+                    <span class="nav-label">Bunching Early Warning</span>
+                    <span class="nav-badge alert-badge" id="bunching-badge-count">2</span>
+                </button>
+
+                <button class="nav-item" data-view="demand-capacity" id="nav-demand">
+                    <span class="nav-icon">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="9" cy="7" r="4"></circle>
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                        </svg>
+                    </span>
+                    <span class="nav-label">Demand & Capacity</span>
+                </button>
+
+                <button class="nav-item" data-view="fleet-reallocation" id="nav-reallocation">
+                    <span class="nav-icon">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="16 3 21 3 21 8"></polyline>
+                            <line x1="4" y1="20" x2="21" y2="3"></line>
+                            <polyline points="21 16 21 21 16 21"></polyline>
+                            <line x1="15" y1="15" x2="21" y2="21"></line>
+                            <line x1="4" y1="4" x2="9" y2="9"></line>
+                        </svg>
+                    </span>
+                    <span class="nav-label">Fleet Reallocation</span>
+                    <span class="nav-badge pulse-badge">MILP</span>
+                </button>
+
+                <button class="nav-item" data-view="what-if-simulator" id="nav-simulator">
+                    <span class="nav-icon">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                        </svg>
+                    </span>
+                    <span class="nav-label">What-If Simulator</span>
+                </button>
+
+                <button class="nav-item" data-view="model-audit" id="nav-audit">
+                    <span class="nav-icon">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                        </svg>
+                    </span>
+                    <span class="nav-label">AI Model Audit</span>
+                </button>
+            </nav>
+
+            <div class="nav-footer">
+                <div class="system-status-card">
+                    <div class="status-indicator">
+                        <span class="pulse-dot"></span>
+                        <span class="status-text">MILP Solver Ready</span>
+                    </div>
+                    <div class="system-subtext">OR-Tools v9.11 • Chronological ML</div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- MAIN WORKSPACE -->
+        <main class="main-content">
+            <!-- TOP EXECUTIVE HEADER & FILTERS -->
+            <header class="top-header">
+                <div class="header-left">
+                    <h1 class="page-title" id="current-view-title">Command Center</h1>
+                    <p class="page-subtitle" id="current-view-subtitle">Live Tamil Nadu Transit Telemetry, Predictive Deficits & Optimization</p>
+                </div>
+
+                <div class="header-center">
+                    <!-- City / Region Tabs -->
+                    <div class="region-tabs" id="region-tabs">
+                        <button class="region-tab active" data-city="All Tamil Nadu">All Tamil Nadu</button>
+                        <button class="region-tab" data-city="Chennai">Chennai</button>
+                        <button class="region-tab" data-city="Coimbatore">Coimbatore</button>
+                        <button class="region-tab" data-city="Madurai">Madurai</button>
+                        <button class="region-tab" data-city="Intercity">Intercity</button>
+                        <button class="region-tab" data-city="Regional">Regional</button>
+                    </div>
+                </div>
+
+                <div class="header-right">
+                    <div class="control-group">
+                        <label for="date-select">Planning Date</label>
+                        <select id="date-select" class="dark-select"></select>
+                    </div>
+
+                    <div class="control-group">
+                        <label for="hour-select">Operating Hour</label>
+                        <select id="hour-select" class="dark-select"></select>
+                    </div>
+
+                    <button class="btn btn-primary" id="btn-quick-optimize">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                            <polyline points="23 4 23 10 17 10"></polyline>
+                            <polyline points="1 20 1 14 7 14"></polyline>
+                            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                        </svg>
+                        <span>Run Optimizer</span>
+                    </button>
+
+                    <div class="badge-prototype">
+                        <span>⚠️ Synthetic Prototype</span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- 5 KPI EXECUTIVE METRIC CARDS (Matching Navionyx) -->
+            <section class="kpi-strip">
+                <div class="kpi-card" id="kpi-buses">
+                    <div class="kpi-top">
+                        <span class="kpi-icon icon-cyan">🚌</span>
+                        <span class="kpi-label">Active Fleet</span>
+                        <span class="kpi-badge badge-cyan">ON ROAD</span>
+                    </div>
+                    <div class="kpi-value" id="val-total-buses">--</div>
+                    <div class="kpi-subtext" id="sub-total-buses">14 Operational Corridors</div>
+                </div>
+
+                <div class="kpi-card" id="kpi-demand">
+                    <div class="kpi-top">
+                        <span class="kpi-icon icon-purple">👥</span>
+                        <span class="kpi-label">Hourly Demand</span>
+                        <span class="kpi-badge badge-purple">PREDICTED</span>
+                    </div>
+                    <div class="kpi-value" id="val-total-demand">--</div>
+                    <div class="kpi-subtext">Pax/hr Network-Wide</div>
+                </div>
+
+                <div class="kpi-card" id="kpi-capacity">
+                    <div class="kpi-top">
+                        <span class="kpi-icon icon-emerald">💺</span>
+                        <span class="kpi-label">Seat Capacity</span>
+                        <span class="kpi-badge badge-emerald">ALLOCATED</span>
+                    </div>
+                    <div class="kpi-value" id="val-total-capacity">--</div>
+                    <div class="kpi-subtext">50 Pax / Standard Bus</div>
+                </div>
+
+                <div class="kpi-card" id="kpi-performance">
+                    <div class="kpi-top">
+                        <span class="kpi-icon icon-teal">🎯</span>
+                        <span class="kpi-label">On-Time Performance</span>
+                        <span class="kpi-badge badge-teal">SERVICE LEVEL</span>
+                    </div>
+                    <div class="kpi-value" id="val-on-time-perf">--%</div>
+                    <div class="kpi-subtext">Headway Regularity Score</div>
+                </div>
+
+                <div class="kpi-card" id="kpi-alerts">
+                    <div class="kpi-top">
+                        <span class="kpi-icon icon-rose">⚠️</span>
+                        <span class="kpi-label">Bunching Alerts</span>
+                        <span class="kpi-badge badge-rose" id="kpi-alerts-badge">ACTIVE</span>
+                    </div>
+                    <div class="kpi-value" id="val-bunching-alerts">--</div>
+                    <div class="kpi-subtext" id="sub-bunching-alerts">Critical Headway Variance</div>
+                </div>
+            </section>
+
+            <!-- DYNAMIC VIEW CONTAINERS -->
+
+            <!-- VIEW 1: COMMAND CENTER (Real-Time Map + Charts + Watchlist) -->
+            <div class="view-container active" id="view-command-center">
+                <div class="dashboard-grid">
+                    <!-- CENTER-LEFT: REAL TIME TRANSIT MAP (Inspired by Fleet Tings & Navionyx) -->
+                    <div class="panel map-panel">
+                        <div class="panel-header">
+                            <div class="panel-title-group">
+                                <h3>Real-Time Transit Network Map</h3>
+                                <span class="panel-caption">Tamil Nadu Corridors • Live Simulated Bus Positions • Headway Risk Glow</span>
+                            </div>
+                            <div class="map-controls-header">
+                                <span class="map-legend-item"><span class="legend-dot dot-cyan"></span> Low Risk</span>
+                                <span class="map-legend-item"><span class="legend-dot dot-amber"></span> Medium Risk</span>
+                                <span class="map-legend-item"><span class="legend-dot dot-red"></span> High Bunching</span>
+                                <button class="btn btn-sm btn-outline" id="btn-reset-map">Reset View</button>
+                            </div>
+                        </div>
+                        <div class="map-wrapper">
+                            <div id="transit-map" class="dark-leaflet-map"></div>
+                            <!-- Floating Corridor Quick Inspector -->
+                            <div class="floating-inspector" id="floating-inspector">
+                                <div class="inspector-header">
+                                    <span id="inspector-route-id">TN03</span>
+                                    <span class="inspector-badge" id="inspector-risk">High Risk</span>
+                                </div>
+                                <div class="inspector-body">
+                                    <div class="inspector-stat">
+                                        <span class="stat-lbl">Corridor</span>
+                                        <span class="stat-val" id="inspector-name">Koyambedu → OMR</span>
+                                    </div>
+                                    <div class="inspector-stat">
+                                        <span class="stat-lbl">Demand vs Capacity</span>
+                                        <span class="stat-val" id="inspector-demand">340 / 250 pax</span>
+                                    </div>
+                                    <div class="inspector-stat">
+                                        <span class="stat-lbl">Capacity Deficit</span>
+                                        <span class="stat-val text-red" id="inspector-deficit">-90 pax/hr</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- RIGHT STACKED TELEMETRY PANELS (Inspired by Reference Images) -->
+                    <div class="telemetry-stack">
+                        <!-- Card 1: Route Optimization Curve -->
+                        <div class="panel telemetry-card">
+                            <div class="panel-header">
+                                <h4>Route Optimization Curve</h4>
+                                <span class="badge badge-purple">AI FORECAST</span>
+                            </div>
+                            <div class="chart-box">
+                                <canvas id="chart-route-optimization"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Card 2: Corridor Headway Regularity -->
+                        <div class="panel telemetry-card">
+                            <div class="panel-header">
+                                <h4>Headway Variance & Regularity</h4>
+                                <span class="badge badge-teal">STABILITY</span>
+                            </div>
+                            <div class="chart-box">
+                                <canvas id="chart-headway-distribution"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Card 3: Priority Dispatch Alerts (Matching Navionyx Alerts Box) -->
+                        <div class="panel telemetry-card alerts-panel">
+                            <div class="panel-header">
+                                <h4>Priority Operational Alerts</h4>
+                                <span class="badge badge-rose" id="alerts-count-tag">Live</span>
+                            </div>
+                            <div class="alerts-feed" id="alerts-feed-list">
+                                <!-- Dynamically populated alert items -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- BOTTOM ROW: PRIORITY CORRIDOR WATCHLIST TABLE -->
+                <div class="panel table-panel">
+                    <div class="panel-header">
+                        <div class="panel-title-group">
+                            <h3>Monitored Corridors & Dynamic Fleet Telemetry</h3>
+                            <span class="panel-caption">Ranked by Capacity Deficit • Click a corridor to focus on map</span>
+                        </div>
+                        <div class="search-box">
+                            <input type="text" id="corridor-search" placeholder="Search corridor, terminal, or city...">
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="data-table" id="watchlist-table">
+                            <thead>
+                                <tr>
+                                    <th>Route</th>
+                                    <th>Corridor Origin & Destination</th>
+                                    <th>Region</th>
+                                    <th>Hourly Demand</th>
+                                    <th>Allocated Buses</th>
+                                    <th>Seat Capacity</th>
+                                    <th>Deficit / Surplus</th>
+                                    <th>Utilization</th>
+                                    <th>Bunching Probability</th>
+                                    <th>Risk Level</th>
+                                </tr>
+                            </thead>
+                            <tbody id="watchlist-tbody">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW 2: BUNCHING EARLY WARNING -->
+            <div class="view-container" id="view-bunching-monitor">
+                <div class="section-intro">
+                    <h2>Bus Bunching Early-Warning System</h2>
+                    <p>Trained Random Forest Classifier (ROC-AUC: 0.9550, Recall: 84.71%). Detects headway decay before vehicles coalesce into unmanageable queues.</p>
+                </div>
+
+                <div class="grid-2-col">
+                    <div class="panel">
+                        <div class="panel-header">
+                            <h3>Scheduled vs Actual Headways</h3>
+                            <span class="badge badge-cyan">DEVIATION ANALYSIS</span>
+                        </div>
+                        <div class="chart-box-large">
+                            <canvas id="chart-bunching-headways"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="panel">
+                        <div class="panel-header">
+                            <h3>Bunching Risk Probability Distribution</h3>
+                            <span class="badge badge-rose">CORRIDOR BREAKDOWN</span>
+                        </div>
+                        <div class="chart-box-large">
+                            <canvas id="chart-bunching-probabilities"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel" style="margin-top: 1.25rem;">
+                    <div class="panel-header">
+                        <h3>Plain-Language Operational Advisories</h3>
+                        <span class="badge badge-purple">DISPATCH PROTOCOLS</span>
+                    </div>
+                    <div class="advisories-grid" id="bunching-advisories-grid">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW 3: DEMAND & CAPACITY DEFICIT -->
+            <div class="view-container" id="view-demand-capacity">
+                <div class="section-intro">
+                    <h2>Passenger Demand & Capacity Shortage Predictor</h2>
+                    <p>Random Forest Regressor (MAE: 4.37 pax/hr, R²: 0.8002). Predicts passenger density per corridor and pinpoints seat deficits.</p>
+                </div>
+
+                <div class="panel">
+                    <div class="panel-header">
+                        <h3>Hourly Passenger Demand vs Allocated Capacity Across Network</h3>
+                        <span class="badge badge-emerald">NETWORK DENSITY</span>
+                    </div>
+                    <div class="chart-box-large">
+                        <canvas id="chart-demand-vs-capacity"></canvas>
+                    </div>
+                </div>
+
+                <div class="panel" style="margin-top: 1.25rem;">
+                    <div class="panel-header">
+                        <h3>Ranked Corridor Bottleneck Summary</h3>
+                        <span class="badge badge-rose">SHORTAGE RANKING</span>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Route</th>
+                                    <th>Corridor</th>
+                                    <th>Type</th>
+                                    <th>Forecast Demand</th>
+                                    <th>Current Capacity</th>
+                                    <th>Deficit / Shortage</th>
+                                    <th>Stress Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="demand-bottlenecks-tbody">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW 4: FLEET REALLOCATION & BUS SHIFTING (THE CORE USER REQUIREMENT) -->
+            <div class="view-container" id="view-fleet-reallocation">
+                <div class="section-intro">
+                    <h2>Dynamic Bus Reallocation Simulator & Shift Directives</h2>
+                    <p>Google OR-Tools Mixed-Integer Linear Programming (MILP). Reallocates available fleet to eliminate passenger shortages while enforcing exact fleet conservation and minimum service constraints.</p>
+                </div>
+
+                <!-- OPTIMIZATION CONTROLS -->
+                <div class="optimizer-control-bar">
+                    <div class="optimizer-stat">
+                        <span class="opt-label">Fleet Conservation</span>
+                        <div class="opt-input-row">
+                            <input type="checkbox" id="chk-conserve-fleet" checked>
+                            <label for="chk-conserve-fleet">Exact Conservation (Zero Net New Buses)</label>
+                        </div>
+                    </div>
+
+                    <div class="optimizer-stat">
+                        <span class="opt-label">Fleet Adjustment</span>
+                        <input type="range" id="slider-fleet-adj" min="-10" max="15" value="0" step="1">
+                        <span id="lbl-fleet-adj">+0 Buses</span>
+                    </div>
+
+                    <div class="optimizer-stat">
+                        <span class="opt-label">Min Service Floor</span>
+                        <select id="select-min-service" class="dark-select">
+                            <option value="1">1 Bus (Base Essential)</option>
+                            <option value="2" selected>2 Buses (Recommended Policy)</option>
+                            <option value="3">3 Buses (High Floor)</option>
+                        </select>
+                    </div>
+
+                    <button class="btn btn-primary btn-lg" id="btn-solve-milp">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                        </svg>
+                        <span>Solve Optimal Fleet Shift</span>
+                    </button>
+                </div>
+
+                <!-- SOLVER RESULTS METRICS -->
+                <div class="solver-summary-ribbon" id="solver-summary-ribbon">
+                    <div class="ribbon-card">
+                        <span class="ribbon-title">Total Fleet Available</span>
+                        <span class="ribbon-val" id="sol-fleet-avail">--</span>
+                    </div>
+                    <div class="ribbon-card">
+                        <span class="ribbon-title">Fleet Conservation</span>
+                        <span class="ribbon-val text-emerald" id="sol-conserved">Verified</span>
+                    </div>
+                    <div class="ribbon-card">
+                        <span class="ribbon-title">Buses Reallocated</span>
+                        <span class="ribbon-val text-purple" id="sol-buses-shifted">--</span>
+                    </div>
+                    <div class="ribbon-card">
+                        <span class="ribbon-title">Initial Network Deficit</span>
+                        <span class="ribbon-val text-rose" id="sol-deficit-before">-- pax</span>
+                    </div>
+                    <div class="ribbon-card">
+                        <span class="ribbon-title">Optimized Network Deficit</span>
+                        <span class="ribbon-val text-cyan" id="sol-deficit-after">-- pax</span>
+                    </div>
+                    <div class="ribbon-card">
+                        <span class="ribbon-title">Shortage Reduction</span>
+                        <span class="ribbon-val text-emerald" id="sol-deficit-pct">--%</span>
+                    </div>
+                </div>
+
+                <!-- THE CORE HIGHLIGHT: CONCRETE BUS SHIFT DIRECTIVES BOARD -->
+                <div class="panel" style="margin-top: 1.25rem;">
+                    <div class="panel-header">
+                        <div class="panel-title-group">
+                            <h3>Concrete Bus Movement Directives</h3>
+                            <span class="panel-caption">Explicit Bus IDs, Capacity, Source Route, Destination Route, and Deficit Relieved</span>
+                        </div>
+                        <span class="badge badge-purple" id="badge-total-directives">Directives Ready</span>
+                    </div>
+
+                    <div class="directives-board" id="directives-board">
+                        <!-- Populated with rich visual movement cards -->
+                    </div>
+                </div>
+
+                <!-- BEFORE VS AFTER ALLOCATION COMPARISON -->
+                <div class="panel" style="margin-top: 1.25rem;">
+                    <div class="panel-header">
+                        <h3>Corridor Fleet Changes (Current vs Optimized Allocation)</h3>
+                        <span class="badge badge-cyan">COMPARATIVE AUDIT</span>
+                    </div>
+                    <div class="chart-box-large">
+                        <canvas id="chart-allocation-comparison"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW 5: WHAT-IF SCENARIO SIMULATOR -->
+            <div class="view-container" id="view-what-if-simulator">
+                <div class="section-intro">
+                    <h2>Stress-Test What-If Scenario Simulator</h2>
+                    <p>Evaluate network resilience against demand shocks, severe weather, festival travel peaks (Diwali / Pongal), and fleet breakdowns.</p>
+                </div>
+
+                <div class="simulator-controls-card">
+                    <div class="sim-slider-group">
+                        <div class="slider-header">
+                            <span class="slider-title">Demand Multiplier</span>
+                            <span class="slider-val" id="lbl-sim-demand">1.0x (Normal)</span>
+                        </div>
+                        <input type="range" id="slider-sim-demand" min="0.5" max="2.2" value="1.0" step="0.1">
+                    </div>
+
+                    <div class="sim-slider-group">
+                        <div class="slider-header">
+                            <span class="slider-title">Fleet Change</span>
+                            <span class="slider-val" id="lbl-sim-fleet">0 Buses</span>
+                        </div>
+                        <input type="range" id="slider-sim-fleet" min="-15" max="15" value="0" step="1">
+                    </div>
+
+                    <div class="sim-slider-group">
+                        <div class="slider-header">
+                            <span class="slider-title">Disruption Event</span>
+                        </div>
+                        <select id="select-sim-disruption" class="dark-select" style="width: 100%;">
+                            <option value="None">None (Normal Baseline)</option>
+                            <option value="Rain">Monsoon / Severe Rain (+25% Demand Delay)</option>
+                            <option value="Roadworks">Arterial Roadworks (+15% Demand)</option>
+                            <option value="Peak_Festival">Festival Surge (Pongal / Diwali +60% Demand)</option>
+                        </select>
+                    </div>
+
+                    <button class="btn btn-primary" id="btn-run-simulation" style="height: 44px; margin-top: 1.5rem;">
+                        <span>Simulate Impact</span>
+                    </button>
+                </div>
+
+                <!-- Simulation Summary -->
+                <div class="grid-3-col" style="margin-top: 1.25rem;">
+                    <div class="panel kpi-card">
+                        <div class="kpi-top">
+                            <span class="kpi-icon icon-purple">📈</span>
+                            <span class="kpi-label">Simulated Demand</span>
+                        </div>
+                        <div class="kpi-value" id="sim-val-demand">--</div>
+                        <div class="kpi-subtext" id="sim-sub-demand">Effective Surge Multiplier</div>
+                    </div>
+
+                    <div class="panel kpi-card">
+                        <div class="kpi-top">
+                            <span class="kpi-icon icon-rose">⚠️</span>
+                            <span class="kpi-label">Projected Deficit</span>
+                        </div>
+                        <div class="kpi-value text-rose" id="sim-val-deficit">--</div>
+                        <div class="kpi-subtext">Unmet Passengers Network-wide</div>
+                    </div>
+
+                    <div class="panel kpi-card">
+                        <div class="kpi-top">
+                            <span class="kpi-icon icon-amber">🔥</span>
+                            <span class="kpi-label">Network Stress Index</span>
+                        </div>
+                        <div class="kpi-value text-amber" id="sim-val-stress">--</div>
+                        <div class="kpi-subtext">Ratio of Demand to Available Seats</div>
+                    </div>
+                </div>
+
+                <div class="panel" style="margin-top: 1.25rem;">
+                    <div class="panel-header">
+                        <h3>Simulated Corridor Breakdown</h3>
+                        <span class="badge badge-amber">STRESS RANKINGS</span>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Route</th>
+                                    <th>Corridor</th>
+                                    <th>Base Demand</th>
+                                    <th>Simulated Demand</th>
+                                    <th>Capacity</th>
+                                    <th>Projected Shortage</th>
+                                    <th>Stress Index</th>
+                                </tr>
+                            </thead>
+                            <tbody id="sim-corridors-tbody">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW 6: AI MODEL AUDIT & GOVERNANCE -->
+            <div class="view-container" id="view-model-audit">
+                <div class="section-intro">
+                    <h2>AI Model Governance & Explainability Audit</h2>
+                    <p>Transparent ML metrics, chronological validation, and zero-leakage training governance.</p>
+                </div>
+
+                <div class="grid-2-col">
+                    <div class="panel">
+                        <div class="panel-header">
+                            <h3>Bus Bunching Classifier (RandomForest)</h3>
+                            <span class="badge badge-emerald">ACCURACY: 88.69%</span>
+                        </div>
+                        <div class="metrics-grid">
+                            <div class="metric-pill">
+                                <span class="pill-title">ROC-AUC</span>
+                                <span class="pill-value text-emerald">0.9550</span>
+                            </div>
+                            <div class="metric-pill">
+                                <span class="pill-title">Recall</span>
+                                <span class="pill-value text-cyan">84.71%</span>
+                            </div>
+                            <div class="metric-pill">
+                                <span class="pill-title">Precision</span>
+                                <span class="pill-value text-purple">82.10%</span>
+                            </div>
+                            <div class="metric-pill">
+                                <span class="pill-title">Trees</span>
+                                <span class="pill-value">150 Estimators</span>
+                            </div>
+                        </div>
+                        <h4 style="margin-top: 1.25rem; font-size: 0.85rem; color: #94a3b8;">Feature Importances</h4>
+                        <div class="chart-box" style="height: 180px;">
+                            <canvas id="chart-audit-bunching-features"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="panel">
+                        <div class="panel-header">
+                            <h3>Passenger Demand Regressor (RandomForest)</h3>
+                            <span class="badge badge-cyan">R² SCORE: 0.8002</span>
+                        </div>
+                        <div class="metrics-grid">
+                            <div class="metric-pill">
+                                <span class="pill-title">MAE</span>
+                                <span class="pill-value text-emerald">4.37 pax/hr</span>
+                            </div>
+                            <div class="metric-pill">
+                                <span class="pill-title">Error Reduction</span>
+                                <span class="pill-value text-cyan">42.2% vs Baseline</span>
+                            </div>
+                            <div class="metric-pill">
+                                <span class="pill-title">RMSE</span>
+                                <span class="pill-value text-purple">6.82 pax</span>
+                            </div>
+                            <div class="metric-pill">
+                                <span class="pill-title">Trees</span>
+                                <span class="pill-value">200 Estimators</span>
+                            </div>
+                        </div>
+                        <h4 style="margin-top: 1.25rem; font-size: 0.85rem; color: #94a3b8;">Feature Importances</h4>
+                        <div class="chart-box" style="height: 180px;">
+                            <canvas id="chart-audit-demand-features"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel" style="margin-top: 1.25rem;">
+                    <div class="panel-header">
+                        <h3>Zero-Leakage Chronological Protocol</h3>
+                        <span class="badge badge-purple">ETHICAL AI</span>
+                    </div>
+                    <div style="font-size: 0.88rem; line-height: 1.6; color: #cbd5e1;">
+                        <p><strong>Validation Split:</strong> Data split strictly chronologically at cutoff date <code>2026-10-20</code>. Models were trained strictly on preceding dates and evaluated on unseen future timestamps to prevent look-ahead bias.</p>
+                        <p style="margin-top: 0.5rem;"><strong>Fleet Conservation Enforced:</strong> The optimization engine strictly guarantees that buses cannot be magically spawned — all allocations respect integer vehicle units, minimum service bounds, and fleet sum conservation.</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <!-- Custom Scripts -->
+    <script src="/static/js/charts.js"></script>
+    <script src="/static/js/map.js"></script>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,83 @@
+{
+  "model_type": "RandomForestClassifier",
+  "level": "route_hour",
+  "cutoff_date": "2026-10-20",
+  "train_samples": 29784,
+  "test_samples": 7446,
+  "test_positive_count": 85,
+  "accuracy": 0.8869191512221327,
+  "precision": 0.07991120976692564,
+  "recall": 0.8470588235294118,
+  "f1": 0.1460446247464503,
+  "roc_auc": 0.9549877334441451,
+  "confusion_matrix": [
+    [
+      6532,
+      829
+    ],
+    [
+      13,
+      72
+    ]
+  ],
+  "classification_report": {
+    "0": {
+      "precision": 0.9980137509549274,
+      "recall": 0.8873794321423719,
+      "f1-score": 0.9394505968646627,
+      "support": 7361.0
+    },
+    "1": {
+      "precision": 0.07991120976692564,
+      "recall": 0.8470588235294118,
+      "f1-score": 0.1460446247464503,
+      "support": 85.0
+    },
+    "accuracy": 0.8869191512221327,
+    "macro avg": {
+      "precision": 0.5389624803609265,
+      "recall": 0.8672191278358918,
+      "f1-score": 0.5427476108055564,
+      "support": 7446.0
+    },
+    "weighted avg": {
+      "precision": 0.9875331283386259,
+      "recall": 0.8869191512221327,
+      "f1-score": 0.9303934510642264,
+      "support": 7446.0
+    }
+  },
+  "top_feature_importance": {
+    "mean_scheduled_headway_min_synthetic": 0.33297591345716165,
+    "min_scheduled_headway_min_synthetic": 0.2951135266355636,
+    "buses_scheduled_synthetic": 0.08770491794647695,
+    "hour": 0.084233366785238,
+    "corridor_type_Intercity": 0.051567026176806016,
+    "month": 0.014524749809152936,
+    "route_id_TN08": 0.010092468586327494,
+    "seasonal_scenario_name_none": 0.009482720415339162,
+    "corridor_type_Intercity/pilgrimage": 0.007927837558465513,
+    "route_id_TN06": 0.007900434569551308,
+    "route_id_TN04": 0.006999490564184332,
+    "seasonal_scenario_name_Aadi season": 0.006504333626280916,
+    "route_id_TN07": 0.005670159544340033,
+    "route_id_TN05": 0.004867657079936251,
+    "day_of_week_Friday": 0.004293458094674506
+  },
+  "numeric_features": [
+    "hour",
+    "month",
+    "is_weekend",
+    "mean_scheduled_headway_min_synthetic",
+    "min_scheduled_headway_min_synthetic",
+    "buses_scheduled_synthetic",
+    "trip_count_synthetic"
+  ],
+  "categorical_features": [
+    "route_id",
+    "day_of_week",
+    "seasonal_scenario_name",
+    "disruption_scenario_name",
+    "corridor_type"
+  ]
+}
