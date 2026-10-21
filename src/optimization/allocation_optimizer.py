@@ -132,18 +132,44 @@ def _solve_ortools_milp(
         solver.Add(dev[i] >= x[i] - r.current_buses)
         solver.Add(dev[i] >= r.current_buses - x[i])
         
-    # Fleet constraint
-    total_allocated_expr = solver.Sum([x[i] for i in range(n)])
-    if conserve_exact_fleet:
-        solver.Add(total_allocated_expr == fleet_limit)
-    else:
-        solver.Add(total_allocated_expr <= fleet_limit)
+    # Geographic & Depot Cluster Constraints:
+    # Public transit vehicles cannot be deadheaded across distant cities (e.g. Madurai to Trichy > 130 km).
+    # Fleet conservation is strictly enforced PER OPERATIONAL CLUSTER so routes only trade within their local depot zone.
+    cluster_indices = {}
+    for i, r in enumerate(inputs):
+        c_name = getattr(r, "depot_cluster", "General") or "General"
+        cluster_indices.setdefault(c_name, []).append(i)
         
-    # Objective function
+    current_fleet_sum = sum(r.current_buses for r in inputs)
+    fleet_delta = fleet_limit - current_fleet_sum
+    
+    if fleet_delta == 0 and conserve_exact_fleet:
+        # Strict intra-cluster conservation: each cluster retains its exact vehicle count
+        for c_name, idx_list in cluster_indices.items():
+            cluster_base = sum(inputs[idx].current_buses for idx in idx_list)
+            solver.Add(solver.Sum([x[idx] for idx in idx_list]) == cluster_base)
+    else:
+        # Fleet adjustment: guarantee minimum service floor per cluster and enforce total fleet limit
+        for c_name, idx_list in cluster_indices.items():
+            min_floor = sum(inputs[idx].minimum_service_buses for idx in idx_list)
+            solver.Add(solver.Sum([x[idx] for idx in idx_list]) >= min_floor)
+        total_allocated_expr = solver.Sum([x[i] for i in range(n)])
+        if conserve_exact_fleet:
+            solver.Add(total_allocated_expr == fleet_limit)
+        else:
+            solver.Add(total_allocated_expr <= fleet_limit)
+        
+    # Objective function with 75% Capacity Threshold Rule:
+    # An extra 50-passenger bus incurs substantial operational, driver, and fuel cost.
+    # We calibrate deviation penalty so that an extra bus requires at least ~70-75% capacity (>= 35 unserved pax)
+    # to justify scheduling an additional vehicle. A bus will NOT be deployed for just 1 stranded passenger.
+    threshold_pax = 0.75 * inputs[0].bus_capacity if inputs else 37.5
+    effective_dev_penalty = max(deviation_penalty, (shortage_penalty * threshold_pax) / 2.0)
+    
     objective = solver.Objective()
     for i in range(n):
         objective.SetCoefficient(s[i], shortage_penalty)
-        objective.SetCoefficient(dev[i], deviation_penalty)
+        objective.SetCoefficient(dev[i], effective_dev_penalty)
         objective.SetCoefficient(x[i], bus_usage_cost)
     objective.SetMinimization()
     

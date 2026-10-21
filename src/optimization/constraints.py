@@ -15,6 +15,7 @@ class RouteAllocationInput:
     minimum_service_buses: int = 1
     max_buses_allowed: int = 30
     bunching_risk_prob: float = 0.0
+    depot_cluster: str = "General"
 
 @dataclass
 class AllocationResult:

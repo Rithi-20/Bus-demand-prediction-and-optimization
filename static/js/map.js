@@ -38,11 +38,12 @@ function initTransitMap() {
     L.control.zoom({ position: 'bottomright' }).addTo(map);
 }
 
+let currentCorridors = [];
+
 function renderMapCorridors(corridors) {
     if (!map) initTransitMap();
     if (!map) return;
-
-    // Clear existing
+    currentCorridors = corridors || [];
     routeLayers.forEach(l => map.removeLayer(l));
     busMarkers.forEach(m => map.removeLayer(m));
     routeLayers = [];
@@ -216,3 +217,23 @@ function drawReallocationTrajectories(shiftDirectives, corridorsMap) {
         }
     });
 }
+
+function focusCorridorOnMap(routeId) {
+    if (!map || !currentCorridors) return;
+    const corridor = currentCorridors.find(c => c.route_id === routeId);
+    if (!corridor || !corridor.geo || !corridor.geo.waypoints || corridor.geo.waypoints.length === 0) return;
+
+    const waypoints = corridor.geo.waypoints;
+    const midIdx = Math.floor(waypoints.length / 2);
+    const center = waypoints[midIdx];
+    map.flyTo(center, 11, { duration: 0.8 });
+    updateFloatingInspector(corridor);
+}
+
+// Window global exports
+window.initTransitMap = initTransitMap;
+window.renderMapCorridors = renderMapCorridors;
+window.updateMapCorridors = renderMapCorridors;
+window.drawReallocationTrajectories = drawReallocationTrajectories;
+window.focusCorridorOnMap = focusCorridorOnMap;
+window.updateFloatingInspector = updateFloatingInspector;
