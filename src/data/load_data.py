@@ -39,13 +39,56 @@ def load_disruption_scenarios(use_cache: bool = True) -> pd.DataFrame:
     return load_csv("disruption", use_cache)
 
 def load_trips(use_cache: bool = True) -> pd.DataFrame:
-    return load_csv("trips", use_cache)
+    file_key = "trips"
+    if use_cache and file_key in _DATA_CACHE:
+        return _DATA_CACHE[file_key]
+    file_path = FILES.get(file_key)
+    cols = ['date', 'route_id', 'hour', 'scheduled_headway_min_synthetic', 'actual_headway_min_synthetic']
+    dtypes = {
+        'route_id': 'category',
+        'hour': 'int8',
+        'scheduled_headway_min_synthetic': 'float32',
+        'actual_headway_min_synthetic': 'float32'
+    }
+    logger.info(f"Loading {file_key} compactly from {file_path}...")
+    df = pd.read_csv(file_path, usecols=cols, dtype=dtypes)
+    if use_cache:
+        _DATA_CACHE[file_key] = df
+    return df
 
 def load_hourly_demand(use_cache: bool = True) -> pd.DataFrame:
     return load_csv("demand", use_cache)
 
 def load_model_data(use_cache: bool = True) -> pd.DataFrame:
-    return load_csv("model_data", use_cache)
+    file_key = "model_data"
+    if use_cache and file_key in _DATA_CACHE:
+        return _DATA_CACHE[file_key]
+    file_path = FILES.get(file_key)
+    cols = [
+        'date', 'day_of_week', 'month', 'route_id', 'hour', 'is_weekend',
+        'passenger_count_synthetic', 'buses_scheduled_synthetic',
+        'total_capacity_available_synthetic',
+        'mean_scheduled_headway_min_synthetic', 'min_scheduled_headway_min_synthetic',
+        'trip_count_synthetic', 'seasonal_scenario_name', 'disruption_scenario_name', 'corridor_type'
+    ]
+    dtypes = {
+        'route_id': 'category',
+        'day_of_week': 'category',
+        'month': 'int8',
+        'hour': 'int8',
+        'is_weekend': 'int8',
+        'passenger_count_synthetic': 'float32',
+        'buses_scheduled_synthetic': 'int8',
+        'total_capacity_available_synthetic': 'float32',
+        'mean_scheduled_headway_min_synthetic': 'float32',
+        'min_scheduled_headway_min_synthetic': 'float32',
+        'trip_count_synthetic': 'int8'
+    }
+    logger.info(f"Loading {file_key} compactly from {file_path}...")
+    df = pd.read_csv(file_path, usecols=cols, dtype=dtypes)
+    if use_cache:
+        _DATA_CACHE[file_key] = df
+    return df
 
 def load_allocations(use_cache: bool = True) -> pd.DataFrame:
     return load_csv("allocation", use_cache)

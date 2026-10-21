@@ -88,8 +88,7 @@ def init_historical_profiles():
 
     _BASELINE_PROFILES = {
         "detailed": detailed_grp,
-        "fallback": fallback_grp,
-        "model_df": model_df
+        "fallback": fallback_grp
     }
     _2026_MONTHLY_DEMAND = monthly
     return _BASELINE_PROFILES
@@ -218,7 +217,7 @@ def get_2026_vs_2027_comparison(city: Optional[str] = "All Tamil Nadu") -> Dict[
       3. Heatmap matrix (14 routes × 18 operating hours from 06:00 to 23:00)
     """
     profiles = init_historical_profiles()
-    model_df = profiles["model_df"]
+    model_df = load_model_data()
     routes_df = load_routes()
 
     # Filter routes by city if specified

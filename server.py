@@ -156,11 +156,9 @@ def get_corridor_capacity(corridor_type: str, base_seats: int = 50):
         standees = 0  # 0 for Intercity
     return base_seats, standees, base_seats + standees
 
-# Cache Data
+# Cache Data (Optimized for low-RAM deployment)
 ROUTES_DF = load_routes()
-DEMAND_DF = load_hourly_demand()
 MODEL_DF = load_model_data()
-ALLOC_DF = load_allocations()
 TRIPS_DF = load_trips()
 
 # Load Trained Machine Learning Models
@@ -169,18 +167,13 @@ try:
 except Exception as e:
     BUNCHING_PIPE, BUNCHING_META = None, None
 
-try:
-    DEMAND_PIPE, DEMAND_META = load_demand_model()
-except Exception as e:
-    DEMAND_PIPE, DEMAND_META = None, None
-
-# Available dates and hours
-AVAILABLE_DATES = sorted(DEMAND_DF["date"].unique().tolist())
+# Available dates and hours (derived from compact MODEL_DF)
+AVAILABLE_DATES = sorted(MODEL_DF["date"].unique().tolist())
 AVAILABLE_DATES_2027 = [
     (datetime.date(2027, 1, 1) + datetime.timedelta(days=i)).strftime("%Y-%m-%d")
     for i in range(365)
 ]
-AVAILABLE_HOURS = sorted(DEMAND_DF["hour"].unique().tolist())
+AVAILABLE_HOURS = sorted(int(h) for h in MODEL_DF["hour"].unique().tolist())
 
 @app.get("/api/meta")
 def get_metadata():
@@ -281,18 +274,12 @@ def get_overview(
         except Exception:
             hour_model = MODEL_DF[MODEL_DF["hour"] == hour].head(14)
             hour_trips = TRIPS_DF[TRIPS_DF["hour"] == hour].head(14)
-        hour_demand = pd.DataFrame()
-        hour_alloc = pd.DataFrame()
     else:
-        hour_demand = DEMAND_DF[(DEMAND_DF["date"] == date) & (DEMAND_DF["hour"] == hour)]
         hour_model = MODEL_DF[(MODEL_DF["date"] == date) & (MODEL_DF["hour"] == hour)]
-        hour_alloc = ALLOC_DF[(ALLOC_DF["date"] == date) & (ALLOC_DF["hour"] == hour)]
         hour_trips = TRIPS_DF[(TRIPS_DF["date"] == date) & (TRIPS_DF["hour"] == hour)]
         
-        if hour_demand.empty:
-            hour_demand = DEMAND_DF[DEMAND_DF["hour"] == hour].head(14)
+        if hour_model.empty:
             hour_model = MODEL_DF[MODEL_DF["hour"] == hour].head(14)
-            hour_alloc = ALLOC_DF[ALLOC_DF["hour"] == hour].head(14)
             hour_trips = TRIPS_DF[TRIPS_DF["hour"] == hour].head(14)
 
     # Machine Learning Inference: Predict bunching risk probabilities using Random Forest Classifier
@@ -336,17 +323,11 @@ def get_overview(
             t_row = hour_trips[hour_trips["route_id"] == rid] if not hour_trips.empty else pd.DataFrame()
             m_row = hour_model[hour_model["route_id"] == rid] if not hour_model.empty else pd.DataFrame()
         else:
-            d_row = hour_demand[hour_demand["route_id"] == rid]
             m_row = hour_model[hour_model["route_id"] == rid]
-            a_row = hour_alloc[hour_alloc["route_id"] == rid]
             t_row = hour_trips[hour_trips["route_id"] == rid]
             
-            pax_demand = float(d_row["passenger_count_synthetic"].values[0]) if not d_row.empty else (
-                float(m_row["passenger_count_synthetic"].values[0]) if not m_row.empty else 180.0
-            )
-            active_buses = int(a_row["current_buses_scheduled_synthetic"].values[0]) if not a_row.empty else (
-                int(m_row["buses_scheduled_synthetic"].values[0]) if not m_row.empty else 4
-            )
+            pax_demand = float(m_row["passenger_count_synthetic"].values[0]) if not m_row.empty else 180.0
+            active_buses = int(m_row["buses_scheduled_synthetic"].values[0]) if not m_row.empty else 4
         
         total_pax_capacity = active_buses * total_bus_cap
         total_seat_capacity = active_buses * seats
@@ -492,12 +473,12 @@ def run_optimization(req: OptimizerRequest):
     
     if is_forecast:
         pred_2027_df = predict_2027_demand_for_hour(date, hour)
-        hour_demand = pd.DataFrame()
-        hour_alloc = pd.DataFrame()
+        hour_slice = pd.DataFrame()
     else:
         pred_2027_df = None
-        hour_demand = DEMAND_DF[(DEMAND_DF["date"] == date) & (DEMAND_DF["hour"] == hour)]
-        hour_alloc = ALLOC_DF[(ALLOC_DF["date"] == date) & (ALLOC_DF["hour"] == hour)]
+        hour_slice = MODEL_DF[(MODEL_DF["date"] == date) & (MODEL_DF["hour"] == hour)]
+        if hour_slice.empty:
+            hour_slice = MODEL_DF[MODEL_DF["hour"] == hour].head(14)
     
     inputs = []
     route_meta = {}
@@ -531,10 +512,9 @@ def run_optimization(req: OptimizerRequest):
             pax_demand = float(r_match["predicted_demand"].values[0]) if not r_match.empty else 160.0
             cur_buses = int(r_match["buses_scheduled_synthetic"].values[0]) if not r_match.empty else 4
         else:
-            d_row = hour_demand[hour_demand["route_id"] == rid]
-            a_row = hour_alloc[hour_alloc["route_id"] == rid]
-            pax_demand = float(d_row["passenger_count_synthetic"].values[0]) if not d_row.empty else 160.0
-            cur_buses = int(a_row["current_buses_scheduled_synthetic"].values[0]) if not a_row.empty else 4
+            m_row = hour_slice[hour_slice["route_id"] == rid]
+            pax_demand = float(m_row["passenger_count_synthetic"].values[0]) if not m_row.empty else 160.0
+            cur_buses = int(m_row["buses_scheduled_synthetic"].values[0]) if not m_row.empty else 4
         
         route_meta[rid] = {
             "origin": r["origin_terminal_or_area"],
@@ -737,8 +717,9 @@ def run_simulation(req: SimulatorRequest):
 
     effective_mult = req.demand_multiplier * disruption_mult
     
-    hour_demand = DEMAND_DF[(DEMAND_DF["date"] == date) & (DEMAND_DF["hour"] == hour)]
-    hour_alloc = ALLOC_DF[(ALLOC_DF["date"] == date) & (ALLOC_DF["hour"] == hour)]
+    hour_slice = MODEL_DF[(MODEL_DF["date"] == date) & (MODEL_DF["hour"] == hour)]
+    if hour_slice.empty:
+        hour_slice = MODEL_DF[MODEL_DF["hour"] == hour].head(14)
     
     sim_results = []
     total_sim_demand = 0.0
@@ -746,11 +727,9 @@ def run_simulation(req: SimulatorRequest):
     
     for _, r in ROUTES_DF.iterrows():
         rid = r["route_id"]
-        d_row = hour_demand[hour_demand["route_id"] == rid]
-        a_row = hour_alloc[hour_alloc["route_id"] == rid]
-        
-        base_d = float(d_row["passenger_count_synthetic"].values[0]) if not d_row.empty else 160.0
-        cur_b = int(a_row["current_buses_scheduled_synthetic"].values[0]) if not a_row.empty else 4
+        m_row = hour_slice[hour_slice["route_id"] == rid]
+        base_d = float(m_row["passenger_count_synthetic"].values[0]) if not m_row.empty else 160.0
+        cur_b = int(m_row["buses_scheduled_synthetic"].values[0]) if not m_row.empty else 4
         base_seats = int(r["assumed_bus_capacity"])
         seats, standees, total_bus_cap = get_corridor_capacity(r["corridor_type"], base_seats)
         
