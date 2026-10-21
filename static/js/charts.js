@@ -117,7 +117,7 @@ function initHeadwayVarianceChart(corridors) {
 }
 
 function renderBunchingCharts(corridors) {
-    // 1. Scheduled vs Actual Headways
+    // 1. Scheduled vs Actual Headways (Clean, consistent 2-color comparative visualization)
     const ctxH = document.getElementById('chart-bunching-headways');
     if (ctxH) {
         if (chartBunchingHeadways) chartBunchingHeadways.destroy();
@@ -133,13 +133,17 @@ function renderBunchingCharts(corridors) {
                     {
                         label: 'Scheduled Headway (min)',
                         data: scheduled,
-                        backgroundColor: 'rgba(139, 92, 246, 0.5)',
+                        backgroundColor: 'rgba(99, 102, 241, 0.55)',
+                        borderColor: '#6366f1',
+                        borderWidth: 1.5,
                         borderRadius: 4
                     },
                     {
-                        label: 'Observed Headway (min)',
+                        label: 'Observed Gap (min)',
                         data: actual,
-                        backgroundColor: actual.map((a, i) => Math.abs(a - scheduled[i]) > 8 ? '#ef4444' : (Math.abs(a - scheduled[i]) > 3 ? '#f59e0b' : '#06b6d4')),
+                        backgroundColor: 'rgba(56, 189, 248, 0.75)',
+                        borderColor: '#38bdf8',
+                        borderWidth: 1.5,
                         borderRadius: 4
                     }
                 ]
@@ -148,7 +152,18 @@ function renderBunchingCharts(corridors) {
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
-                    legend: { labels: { color: '#ffffff', font: { size: 11 } } }
+                    legend: { labels: { color: '#ffffff', font: { size: 11, family: "'Plus Jakarta Sans', sans-serif" } } },
+                    tooltip: {
+                        callbacks: {
+                            afterBody: function(context) {
+                                const idx = context[0].dataIndex;
+                                const diff = actual[idx] - scheduled[idx];
+                                if (diff < -5) return `⚠️ Bunched: Running ${Math.abs(diff).toFixed(1)} mins too close`;
+                                if (diff > 5) return `⏱️ Delayed: ${diff.toFixed(1)} min extra wait gap`;
+                                return `✅ Normal: On schedule`;
+                            }
+                        }
+                    }
                 },
                 scales: {
                     y: { title: { display: true, text: 'Minutes Between Buses' } }
@@ -169,7 +184,7 @@ function renderBunchingCharts(corridors) {
                 datasets: [{
                     label: 'Probability of Bus Bunching',
                     data: sorted.map(c => Math.round(c.bunching_probability * 100)),
-                    backgroundColor: sorted.map(c => c.risk_level === 'High' ? '#ef4444' : (c.risk_level === 'Medium' ? '#f59e0b' : '#10b981')),
+                    backgroundColor: sorted.map(c => c.risk_level === 'High' ? '#f43f5e' : (c.risk_level === 'Medium' ? '#f59e0b' : '#10b981')),
                     borderRadius: 4
                 }]
             },
@@ -203,13 +218,17 @@ function renderDemandVsCapacityChart(corridors) {
                 {
                     label: 'Forecast Passenger Demand (Pax/hr)',
                     data: demand,
-                    backgroundColor: 'rgba(239, 68, 68, 0.75)',
+                    backgroundColor: 'rgba(99, 102, 241, 0.75)',
+                    borderColor: '#6366f1',
+                    borderWidth: 1,
                     borderRadius: 4
                 },
                 {
                     label: 'Current Seat Capacity (Pax/hr)',
                     data: capacity,
                     backgroundColor: 'rgba(16, 185, 129, 0.75)',
+                    borderColor: '#10b981',
+                    borderWidth: 1,
                     borderRadius: 4
                 }
             ]

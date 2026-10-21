@@ -271,26 +271,73 @@ function renderWatchlistTable(corridors) {
     });
 }
 
-// Bunching Advisories Grid
+// Bunching Advisories Grid (Crystal-clear, plain-language dispatch instructions)
 function renderBunchingAdvisories(corridors) {
     const grid = document.getElementById('bunching-advisories-grid');
     if (!grid) return;
     grid.innerHTML = '';
 
-    corridors.slice(0, 4).forEach(c => {
+    // Sort by bunching risk descending so critical routes appear first
+    const sorted = [...corridors].sort((a, b) => b.bunching_probability - a.bunching_probability);
+
+    // Pick top high/medium corridors first, followed by normal corridors for contrast
+    const displayList = sorted.slice(0, 6);
+
+    displayList.forEach(c => {
         const isHigh = c.risk_level === 'High';
+        const isMed = c.risk_level === 'Medium';
+        const cardClass = isHigh ? 'adv-high' : (isMed ? 'adv-med' : 'adv-low');
+
+        let statusBadge = '';
+        let actionContent = '';
+
+        if (isHigh) {
+            statusBadge = `<span class="adv-badge badge-rose">🚨 ACTION: HOLD DEPARTURE (4-6 MIN)</span>`;
+            actionContent = `
+                <strong>Action for Dispatcher:</strong> Hold the next bus at <strong>${c.origin}</strong> terminal for <strong>4 to 6 minutes</strong> before releasing it into traffic.<br>
+                <span style="display:inline-block; margin-top:0.25rem; opacity:0.9;">
+                    <strong>Why:</strong> Buses are running too close together (${c.observed_headway}m gap vs ${c.scheduled_headway}m scheduled). Holding the trailing bus restores balanced headway and prevents empty paired buses.
+                </span>
+            `;
+        } else if (isMed) {
+            statusBadge = `<span class="adv-badge badge-amber">⚠️ ADVISORY: REGULATE SPEED</span>`;
+            actionContent = `
+                <strong>Action for Dispatcher:</strong> Radio drivers on this corridor to maintain steady cruising speed and avoid leaving stops ahead of time.<br>
+                <span style="display:inline-block; margin-top:0.25rem; opacity:0.9;">
+                    <strong>Why:</strong> The gap between consecutive buses has narrowed to ${c.observed_headway} minutes. Early speed adjustment prevents severe bunching down the line.
+                </span>
+            `;
+        } else {
+            statusBadge = `<span class="adv-badge badge-emerald">✅ ON SCHEDULE: MAINTAIN CADENCE</span>`;
+            actionContent = `
+                <strong>Status:</strong> Normal operation. Vehicles are running with regular ~${c.scheduled_headway}-minute spacing.<br>
+                <span style="display:inline-block; margin-top:0.25rem; opacity:0.9;">
+                    No bunching detected. Continue standard departure timetable as planned.
+                </span>
+            `;
+        }
+
         const card = document.createElement('div');
-        card.className = 'directive-card';
+        card.className = `advisory-card ${cardClass}`;
         card.innerHTML = `
-            <div class="dir-header">
-                <span class="dir-bus-id">${c.route_id} (${c.city})</span>
-                <span class="nav-badge ${isHigh ? 'alert-badge' : 'pulse-badge'}">${c.risk_level} Priority</span>
+            <div class="adv-header">
+                <div class="adv-title-group">
+                    <span class="adv-route">${c.route_id}</span>
+                    <span class="adv-city">${c.city}</span>
+                </div>
+                ${statusBadge}
             </div>
-            <div style="font-size:0.85rem; font-weight:700; color:#ffffff; margin-bottom:0.4rem;">
+            <div class="adv-corridor">
                 ${c.origin} → ${c.destination}
             </div>
-            <div class="dir-impact">
-                <strong>Operational Advisory:</strong> ${isHigh ? 'Hold preceding vehicle at departure terminal by 3-5 minutes to restore headway gap.' : 'Monitor terminal departures; dispatch gap within permissible tolerance.'}
+            <div class="adv-metrics-row">
+                <div class="adv-metric-chip">Scheduled: <strong>${c.scheduled_headway} min</strong></div>
+                <div class="adv-metric-chip">Observed Gap: <strong>${c.observed_headway} min</strong></div>
+                <div class="adv-metric-chip">Bunching Risk: <strong>${Math.round(c.bunching_probability * 100)}%</strong></div>
+                <div class="adv-metric-chip">Active Fleet: <strong>${c.allocated_buses} buses</strong></div>
+            </div>
+            <div class="adv-action-box">
+                ${actionContent}
             </div>
         `;
         grid.appendChild(card);

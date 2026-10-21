@@ -146,72 +146,69 @@
                         <label for="hour-select">Operating Hour</label>
                         <select id="hour-select" class="dark-select"></select>
                     </div>
-
-                    <button class="btn btn-primary" id="btn-quick-optimize">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                            <polyline points="23 4 23 10 17 10"></polyline>
-                            <polyline points="1 20 1 14 7 14"></polyline>
-                            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-                        </svg>
-                        <span>Run Optimizer</span>
-                    </button>
-
-                    <div class="badge-prototype">
-                        <span>⚠️ Synthetic Prototype</span>
-                    </div>
                 </div>
             </header>
 
-            <!-- 5 KPI EXECUTIVE METRIC CARDS (Matching Navionyx) -->
+            <!-- 5 KPI EXECUTIVE METRIC CARDS -->
             <section class="kpi-strip">
                 <div class="kpi-card" id="kpi-buses">
-                    <div class="kpi-top">
-                        <span class="kpi-icon icon-cyan">🚌</span>
+                    <div class="kpi-header-row">
+                        <span class="kpi-icon">🚌</span>
                         <span class="kpi-label">Active Fleet</span>
-                        <span class="kpi-badge badge-cyan">ON ROAD</span>
                     </div>
-                    <div class="kpi-value" id="val-total-buses">--</div>
-                    <div class="kpi-subtext" id="sub-total-buses">14 Operational Corridors</div>
+                    <div class="kpi-main-row">
+                        <span class="kpi-value" id="val-total-buses">--</span>
+                        <span class="kpi-badge badge-blue">ON ROAD</span>
+                    </div>
+                    <div class="kpi-subtext" id="sub-total-buses">14 Corridors</div>
                 </div>
 
                 <div class="kpi-card" id="kpi-demand">
-                    <div class="kpi-top">
-                        <span class="kpi-icon icon-purple">👥</span>
+                    <div class="kpi-header-row">
+                        <span class="kpi-icon">👥</span>
                         <span class="kpi-label">Hourly Demand</span>
-                        <span class="kpi-badge badge-purple">PREDICTED</span>
                     </div>
-                    <div class="kpi-value" id="val-total-demand">--</div>
-                    <div class="kpi-subtext">Pax/hr Network-Wide</div>
+                    <div class="kpi-main-row">
+                        <span class="kpi-value" id="val-total-demand">--</span>
+                        <span class="kpi-badge badge-indigo">PREDICTED</span>
+                    </div>
+                    <div class="kpi-subtext">Pax/hr Network</div>
                 </div>
 
                 <div class="kpi-card" id="kpi-capacity">
-                    <div class="kpi-top">
-                        <span class="kpi-icon icon-emerald">💺</span>
+                    <div class="kpi-header-row">
+                        <span class="kpi-icon">💺</span>
                         <span class="kpi-label">Seat Capacity</span>
-                        <span class="kpi-badge badge-emerald">ALLOCATED</span>
                     </div>
-                    <div class="kpi-value" id="val-total-capacity">--</div>
-                    <div class="kpi-subtext">50 Pax / Standard Bus</div>
+                    <div class="kpi-main-row">
+                        <span class="kpi-value" id="val-total-capacity">--</span>
+                        <span class="kpi-badge badge-slate">CAPACITY</span>
+                    </div>
+                    <div class="kpi-subtext">50 Pax / Bus</div>
                 </div>
 
                 <div class="kpi-card" id="kpi-performance">
-                    <div class="kpi-top">
-                        <span class="kpi-icon icon-teal">🎯</span>
-                        <span class="kpi-label">On-Time Performance</span>
-                        <span class="kpi-badge badge-teal">SERVICE LEVEL</span>
+                    <div class="kpi-header-row">
+                        <span class="kpi-icon">🎯</span>
+                        <span class="kpi-label">On-Time Rate</span>
                     </div>
-                    <div class="kpi-value" id="val-on-time-perf">--%</div>
-                    <div class="kpi-subtext">Headway Regularity Score</div>
+                    <div class="kpi-main-row">
+                        <span class="kpi-value" id="val-on-time-perf">--%</span>
+                        <span class="kpi-badge badge-emerald">ON-TIME</span>
+                    </div>
+                    <div class="kpi-subtext">Headway Regularity</div>
                 </div>
 
                 <div class="kpi-card" id="kpi-alerts">
-                    <div class="kpi-top">
-                        <span class="kpi-icon icon-rose">⚠️</span>
+                    <div class="kpi-header-row">
+                        <span class="kpi-icon">⚠️</span>
                         <span class="kpi-label">Bunching Alerts</span>
+                    </div>
+                    <div class="kpi-main-row">
+                        <span class="kpi-value" id="val-bunching-alerts">--</span>
                         <span class="kpi-badge badge-rose" id="kpi-alerts-badge">ACTIVE</span>
                     </div>
-                    <div class="kpi-value" id="val-bunching-alerts">--</div>
-                    <div class="kpi-subtext" id="sub-bunching-alerts">Critical Headway Variance</div>
+                    <div class="kpi-subtext" id="sub-bunching-alerts">Headway Variance</div>
                 </div>
             </section>
 
@@ -552,11 +549,10 @@
                 </div>
 
                 <!-- Simulation Summary -->
-                <div class="grid-3-col" style="margin-top: 1.25rem;">
+                <div class="grid-3-col" style="margin-top: 1rem;">
                     <div class="panel kpi-card">
                         <div class="kpi-top">
-                            <span class="kpi-icon icon-purple">📈</span>
-                            <span class="kpi-label">Simulated Demand</span>
+                            <span class="kpi-title"><span class="kpi-icon icon-purple">📈</span> Simulated Demand</span>
                         </div>
                         <div class="kpi-value" id="sim-val-demand">--</div>
                         <div class="kpi-subtext" id="sim-sub-demand">Effective Surge Multiplier</div>
@@ -564,8 +560,7 @@
 
                     <div class="panel kpi-card">
                         <div class="kpi-top">
-                            <span class="kpi-icon icon-rose">⚠️</span>
-                            <span class="kpi-label">Projected Deficit</span>
+                            <span class="kpi-title"><span class="kpi-icon icon-rose">⚠️</span> Projected Deficit</span>
                         </div>
                         <div class="kpi-value text-rose" id="sim-val-deficit">--</div>
                         <div class="kpi-subtext">Unmet Passengers Network-wide</div>
@@ -573,8 +568,7 @@
 
                     <div class="panel kpi-card">
                         <div class="kpi-top">
-                            <span class="kpi-icon icon-amber">🔥</span>
-                            <span class="kpi-label">Network Stress Index</span>
+                            <span class="kpi-title"><span class="kpi-icon icon-amber">🔥</span> Network Stress Index</span>
                         </div>
                         <div class="kpi-value text-amber" id="sim-val-stress">--</div>
                         <div class="kpi-subtext">Ratio of Demand to Available Seats</div>
