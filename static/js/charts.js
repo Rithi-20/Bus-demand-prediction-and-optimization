@@ -121,9 +121,9 @@ function renderBunchingCharts(corridors) {
     const ctxH = document.getElementById('chart-bunching-headways');
     if (ctxH) {
         if (chartBunchingHeadways) chartBunchingHeadways.destroy();
-        const labels = corridors.map(c => c.route_id);
-        const scheduled = corridors.map(() => 15);
-        const actual = corridors.map(c => Math.round(15 + (c.bunching_probability - 0.3) * 18));
+        const labels = corridors.map(c => `${c.route_id} (${c.city})`);
+        const scheduled = corridors.map(c => c.scheduled_headway || 15);
+        const actual = corridors.map(c => c.observed_headway || 15);
 
         chartBunchingHeadways = new Chart(ctxH, {
             type: 'bar',
@@ -139,7 +139,7 @@ function renderBunchingCharts(corridors) {
                     {
                         label: 'Observed Headway (min)',
                         data: actual,
-                        backgroundColor: actual.map(a => a > 20 ? '#ef4444' : (a < 10 ? '#f59e0b' : '#06b6d4')),
+                        backgroundColor: actual.map((a, i) => Math.abs(a - scheduled[i]) > 8 ? '#ef4444' : (Math.abs(a - scheduled[i]) > 3 ? '#f59e0b' : '#06b6d4')),
                         borderRadius: 4
                     }
                 ]
