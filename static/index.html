@@ -403,101 +403,36 @@
             <!-- VIEW 3: DEMAND & CAPACITY DEFICIT -->
             <div class="view-container" id="view-demand-capacity">
                 <div class="section-intro">
-                    <h2>Historical Analysis (2026) vs Future Demand Forecast (2027)</h2>
-                    <p>Rigorous predictive comparison powered by Random Forest Regressor (MAE: 4.37 pax/hr, R²: 0.8002). Correlates historical synthetic baselines with model-forecast future passenger density and identifies network capacity deficits.</p>
+                    <h2 id="demand-view-heading">Passenger Demand & Capacity Shortage Predictor</h2>
+                    <p id="demand-view-subtext">Random Forest Regressor (MAE: 4.37 pax/hr, R²: 0.8002). Predicts passenger density per corridor and pinpoints seat deficits.</p>
                 </div>
 
-                <!-- COMPARISON KPI RIBBON -->
-                <div class="comparison-kpi-ribbon">
-                    <div class="comp-kpi-card">
-                        <span class="comp-kpi-lbl">Historical 2026 Avg Demand</span>
-                        <span class="comp-kpi-val" id="comp-val-2026">-- pax/hr</span>
-                        <span class="comp-kpi-sub">Observed Synthetic Baseline</span>
-                    </div>
-                    <div class="comp-kpi-card">
-                        <span class="comp-kpi-lbl">Forecast 2027 Avg Demand</span>
-                        <span class="comp-kpi-val text-purple" id="comp-val-2027">-- pax/hr</span>
-                        <span class="comp-kpi-sub">Trained Model Inference</span>
-                    </div>
-                    <div class="comp-kpi-card">
-                        <span class="comp-kpi-lbl">Forecast Demand Delta</span>
-                        <span class="comp-kpi-val text-cyan" id="comp-val-delta">--</span>
-                        <span class="comp-kpi-sub" id="comp-sub-delta">Simulated Calendar Shift</span>
-                    </div>
-                    <div class="comp-kpi-card">
-                        <span class="comp-kpi-lbl">Corridors with Capacity Shortage</span>
-                        <span class="comp-kpi-val text-rose" id="comp-val-shortage-routes">-- / 14</span>
-                        <span class="comp-kpi-sub">Demand Exceeds Bus Capacity</span>
-                    </div>
-                </div>
-
-                <!-- 2-COLUMN ANALYTICS: MONTHLY TREND LINE + ROUTE-BY-HOUR HEATMAP -->
-                <div class="grid-2-col" style="margin-top: 1.25rem;">
-                    <!-- Monthly Trend Line Chart -->
-                    <div class="panel">
-                        <div class="panel-header">
-                            <div>
-                                <h3>Monthly Demand Trends (Jan — Dec)</h3>
-                                <span class="panel-caption">Historical 2026 vs Future Forecast 2027</span>
-                            </div>
-                            <span class="badge badge-purple">COMPARATIVE TREND</span>
-                        </div>
-                        <div class="chart-box-large">
-                            <canvas id="chart-monthly-comparison"></canvas>
-                        </div>
-                    </div>
-
-                    <!-- Route-by-Hour Heatmap Matrix -->
-                    <div class="panel">
-                        <div class="panel-header">
-                            <div>
-                                <h3>Route-by-Hour Passenger Demand Heatmap</h3>
-                                <span class="panel-caption">14 Corridors × Operating Hours (06:00 - 23:00)</span>
-                            </div>
-                            <span class="badge badge-teal">DENSITY MATRIX</span>
-                        </div>
-                        <div class="heatmap-wrapper" id="forecast-heatmap-container">
-                            <div class="heatmap-loading">Loading demand density matrix...</div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- HOURLY DEMAND VS CAPACITY PANEL -->
-                <div class="panel" style="margin-top: 1.25rem;">
+                <div class="panel">
                     <div class="panel-header">
-                        <div>
-                            <h3>Active Operating Hour: Passenger Demand vs Bus Capacity</h3>
-                            <span class="panel-caption">Comparing Passenger Volume against Seated + Standee Bus Capacity</span>
-                        </div>
-                        <span class="badge badge-emerald">CORRIDOR CAPACITY</span>
+                        <h3 id="demand-chart-title">Hourly Passenger Demand vs Allocated Capacity Across Network</h3>
+                        <span class="badge badge-emerald" id="demand-chart-badge">NETWORK DENSITY</span>
                     </div>
                     <div class="chart-box-large">
                         <canvas id="chart-demand-vs-capacity"></canvas>
                     </div>
                 </div>
 
-                <!-- ROUTE-WISE DEMAND COMPARISON & BOTTLENECK AUDIT TABLE -->
                 <div class="panel" style="margin-top: 1.25rem;">
                     <div class="panel-header">
-                        <div>
-                            <h3>Corridor-Wise Demand Comparison & Capacity Shortage Audit</h3>
-                            <span class="panel-caption">Safe division metrics, potential shortages, and fleet recommendations</span>
-                        </div>
-                        <span class="badge badge-rose">ACTIONABLE BOTTLENECKS</span>
+                        <h3>Ranked Corridor Bottleneck Summary</h3>
+                        <span class="badge badge-rose">SHORTAGE RANKING</span>
                     </div>
                     <div class="table-responsive">
                         <table class="data-table">
                             <thead>
                                 <tr>
                                     <th>Route</th>
-                                    <th>Corridor & City</th>
-                                    <th>Corridor Type</th>
-                                    <th>2026 Hist. Demand</th>
-                                    <th>2027 Forec. Demand</th>
-                                    <th>Net Shift (Δ)</th>
-                                    <th>Bus Capacity</th>
-                                    <th>Potential Shortage</th>
-                                    <th>Fleet Planning Recommendation</th>
+                                    <th>Corridor</th>
+                                    <th>Type</th>
+                                    <th>Passenger Demand</th>
+                                    <th>Current Capacity</th>
+                                    <th>Deficit / Shortage</th>
+                                    <th>Stress Status</th>
                                 </tr>
                             </thead>
                             <tbody id="demand-bottlenecks-tbody">

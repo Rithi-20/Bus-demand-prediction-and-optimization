@@ -210,21 +210,22 @@ function renderDemandVsCapacityChart(corridors) {
     const demand = corridors.map(c => c.passenger_demand);
     const capacity = corridors.map(c => c.seat_capacity);
 
+    const isForecast = (typeof STATE !== 'undefined' && STATE.mode === 'forecast_2027');
     chartDemandCapacity = new Chart(ctx, {
         type: 'bar',
         data: {
             labels: labels,
             datasets: [
                 {
-                    label: 'Forecast Passenger Demand (Pax/hr)',
+                    label: isForecast ? 'Predicted 2027 Demand (Pax/hr)' : 'Historical 2026 Demand (Pax/hr)',
                     data: demand,
-                    backgroundColor: 'rgba(99, 102, 241, 0.75)',
-                    borderColor: '#6366f1',
+                    backgroundColor: isForecast ? 'rgba(168, 85, 247, 0.75)' : 'rgba(99, 102, 241, 0.75)',
+                    borderColor: isForecast ? '#a855f7' : '#6366f1',
                     borderWidth: 1,
                     borderRadius: 4
                 },
                 {
-                    label: 'Current Seat Capacity (Pax/hr)',
+                    label: 'Available Bus Capacity (Pax/hr)',
                     data: capacity,
                     backgroundColor: 'rgba(16, 185, 129, 0.75)',
                     borderColor: '#10b981',

@@ -265,10 +265,24 @@ def get_overview(
     pred_2027_df = None
     if is_forecast:
         pred_2027_df = predict_2027_demand_for_hour(date, hour)
+        try:
+            dt = datetime.datetime.strptime(date, "%Y-%m-%d").date()
+            m_idx = dt.month
+            dow_str = dt.strftime("%A")
+            hour_model = MODEL_DF[(MODEL_DF["month"] == m_idx) & (MODEL_DF["day_of_week"] == dow_str) & (MODEL_DF["hour"] == hour)]
+            if hour_model.empty:
+                hour_model = MODEL_DF[(MODEL_DF["month"] == m_idx) & (MODEL_DF["hour"] == hour)]
+            if hour_model.empty:
+                hour_model = MODEL_DF[MODEL_DF["hour"] == hour].head(14)
+            matching_dates = hour_model["date"].unique()
+            hour_trips = TRIPS_DF[(TRIPS_DF["date"].isin(matching_dates)) & (TRIPS_DF["hour"] == hour)]
+            if hour_trips.empty:
+                hour_trips = TRIPS_DF[TRIPS_DF["hour"] == hour].head(14)
+        except Exception:
+            hour_model = MODEL_DF[MODEL_DF["hour"] == hour].head(14)
+            hour_trips = TRIPS_DF[TRIPS_DF["hour"] == hour].head(14)
         hour_demand = pd.DataFrame()
-        hour_model = pd.DataFrame()
         hour_alloc = pd.DataFrame()
-        hour_trips = pd.DataFrame()
     else:
         hour_demand = DEMAND_DF[(DEMAND_DF["date"] == date) & (DEMAND_DF["hour"] == hour)]
         hour_model = MODEL_DF[(MODEL_DF["date"] == date) & (MODEL_DF["hour"] == hour)]
@@ -319,6 +333,8 @@ def get_overview(
             r_match = pred_2027_df[pred_2027_df["route_id"] == rid]
             pax_demand = float(r_match["predicted_demand"].values[0]) if not r_match.empty else 160.0
             active_buses = int(r_match["buses_scheduled_synthetic"].values[0]) if not r_match.empty else 4
+            t_row = hour_trips[hour_trips["route_id"] == rid] if not hour_trips.empty else pd.DataFrame()
+            m_row = hour_model[hour_model["route_id"] == rid] if not hour_model.empty else pd.DataFrame()
         else:
             d_row = hour_demand[hour_demand["route_id"] == rid]
             m_row = hour_model[hour_model["route_id"] == rid]
@@ -392,7 +408,7 @@ def get_overview(
         else:
             base_sched_headway = round(120.0 / max(2, active_buses), 1)
 
-        if not is_forecast and not t_row.empty and "scheduled_headway_min_synthetic" in t_row.columns and "actual_headway_min_synthetic" in t_row.columns:
+        if not t_row.empty and "scheduled_headway_min_synthetic" in t_row.columns and "actual_headway_min_synthetic" in t_row.columns:
             base_sched_headway = float(t_row["scheduled_headway_min_synthetic"].values[0])
             obs_headway = float(t_row["actual_headway_min_synthetic"].values[0])
         else:

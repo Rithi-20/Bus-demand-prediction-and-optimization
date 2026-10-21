@@ -291,6 +291,7 @@ async function refreshOverviewData() {
             try { renderBunchingAdvisories(data.corridors); } catch (e) {}
         } else if (STATE.currentView === 'demand-capacity') {
             try { renderDemandVsCapacityChart(data.corridors); } catch (e) {}
+            try { renderDemandBottlenecksTable(data.corridors); } catch (e) {}
         }
 
     } catch (err) {
@@ -433,76 +434,31 @@ function renderBunchingAdvisories(corridors) {
 }
 
 // ==========================================================================
-// DEMAND & CAPACITY COMPARISON VIEW (Historical 2026 vs Forecast 2027)
+// DEMAND & CAPACITY VIEW (Same unified chart layout for 2026 and 2027)
 // ==========================================================================
-async function loadDemandCapacityView() {
-    try {
-        const res = await fetch(`/api/forecast/compare?city=${encodeURIComponent(STATE.selectedCity)}`);
-        const data = await res.json();
-        STATE.comparisonData = data;
-
-        // 1. Calculate Summary Metrics for Ribbon
-        const histMonthly = data.monthly_trend.historical_2026;
-        const foreMonthly = data.monthly_trend.forecast_2027;
-        const avgHist = histMonthly.length > 0 ? (histMonthly.reduce((a, b) => a + b, 0) / histMonthly.length) : 0;
-        const avgFore = foreMonthly.length > 0 ? (foreMonthly.reduce((a, b) => a + b, 0) / foreMonthly.length) : 0;
-        const delta = avgFore - avgHist;
-        const deltaPct = avgHist > 0 ? (delta / avgHist * 100.0) : 0.0;
-
-        const shortageCount = data.route_comparison.filter(r => r.capacity_shortage > 0).length;
-
-        document.getElementById('comp-val-2026').innerText = `${Math.round(avgHist)} pax/hr`;
-        document.getElementById('comp-val-2027').innerText = `${Math.round(avgFore)} pax/hr`;
-        
-        const deltaElem = document.getElementById('comp-val-delta');
-        deltaElem.innerText = `${delta >= 0 ? '+' : ''}${Math.round(delta)} pax (${deltaPct >= 0 ? '+' : ''}${deltaPct.toFixed(1)}%)`;
-        deltaElem.className = `comp-kpi-val ${delta >= 0 ? 'text-purple' : 'text-cyan'}`;
-
-        document.getElementById('comp-val-shortage-routes').innerText = `${shortageCount} / ${data.route_comparison.length}`;
-
-        // 2. Render Monthly Trend Comparison Line Chart
-        initMonthlyComparisonChart(
-            data.monthly_trend.labels,
-            data.monthly_trend.historical_2026,
-            data.monthly_trend.forecast_2027
-        );
-
-        // 3. Render Route-by-Hour Heatmap
-        renderRouteHourHeatmap('forecast-heatmap-container', data.heatmap);
-
-        // 4. Render Active Hour Demand vs Capacity
-        if (STATE.overviewData) {
-            renderDemandVsCapacityChart(STATE.overviewData.corridors);
-        }
-
-        // 5. Render Corridor-wise Comparison Table
-        renderDemandComparisonTable(data.route_comparison);
-
-    } catch (err) {
-        console.error('Failed to load demand comparison view:', err);
-    }
+function loadDemandCapacityView() {
+    if (!STATE.overviewData || !STATE.overviewData.corridors) return;
+    renderDemandVsCapacityChart(STATE.overviewData.corridors);
+    renderDemandBottlenecksTable(STATE.overviewData.corridors);
 }
 
-function renderDemandComparisonTable(routes) {
+function renderDemandBottlenecksTable(corridors) {
     const tbody = document.getElementById('demand-bottlenecks-tbody');
     if (!tbody) return;
     tbody.innerHTML = '';
 
-    routes.forEach(r => {
+    const sorted = [...corridors].sort((a, b) => b.capacity_deficit - a.capacity_deficit);
+    sorted.forEach(c => {
         const tr = document.createElement('tr');
-        const isShortage = r.capacity_shortage > 0;
-        const shiftColor = r.difference > 0 ? '#c084fc' : (r.difference < 0 ? '#38bdf8' : '#94a3b8');
-
+        const isShortage = c.capacity_deficit > 0;
         tr.innerHTML = `
-            <td><span class="route-pill">${r.route_id}</span></td>
-            <td><strong>${r.corridor_name}</strong> (${r.city})</td>
-            <td><span style="font-size:0.75rem; color:#94a3b8;">${r.corridor_type}</span></td>
-            <td><strong>${Math.round(r.demand_2026)}</strong> pax/hr</td>
-            <td><strong style="color:#c4b5fd;">${Math.round(r.demand_2027)}</strong> pax/hr</td>
-            <td style="color:${shiftColor}; font-weight:700;">${r.difference >= 0 ? '+' : ''}${r.difference} (${r.pct_change >= 0 ? '+' : ''}${r.pct_change}%)</td>
-            <td>${r.available_capacity} pax</td>
-            <td><span class="deficit-tag ${isShortage ? 'tag-red' : 'tag-emerald'}">${isShortage ? '-' + Math.round(r.capacity_shortage) + ' pax deficit' : '0 deficit'}</span></td>
-            <td><span class="badge ${isShortage ? 'badge-rose' : 'badge-emerald'}">${isShortage ? '⚠️ Relocate +1 Bus' : '✅ Sufficient Capacity'}</span></td>
+            <td><span class="route-pill">${c.route_id}</span></td>
+            <td><strong>${c.origin}</strong> → ${c.destination} (${c.city})</td>
+            <td>${c.corridor_type}</td>
+            <td><strong>${Math.round(c.passenger_demand)}</strong> pax/hr</td>
+            <td>${c.total_capacity} cap (${c.allocated_buses} buses)</td>
+            <td><span class="deficit-tag ${isShortage ? 'tag-red' : 'tag-emerald'}">${isShortage ? '-' + Math.round(c.capacity_deficit) + ' pax deficit' : '+' + Math.round(Math.abs(c.capacity_deficit)) + ' surplus'}</span></td>
+            <td><span style="font-weight:700; color:${isShortage ? '#ef4444' : '#10b981'};">${isShortage ? 'Critical Deficit' : 'Balanced'}</span></td>
         `;
         tbody.appendChild(tr);
     });
