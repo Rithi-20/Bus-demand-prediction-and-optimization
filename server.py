@@ -1,34 +1,22 @@
 """
-Demand Based Public Transport Planning System: High-Performance FastAPI Backend Server.
-Connects trained ML models (Bunching Classifier & Demand Regressor) and
-OR-Tools MILP Reallocation Engine to a premium, interactive dark command center frontend.
+Demand-Based Public Transport Planning System: FastAPI Backend.
+Integrates trained Random Forest Classifier (Bus Bunching) and
+Random Forest Regressor (Passenger Demand) with transparent
+constraint-based fleet reallocation and emergency what-if simulation.
 """
-
 import os
+import glob
 from typing import Dict, Any, List, Optional
-from fastapi import FastAPI, Query, HTTPException
+from fastapi import FastAPI, Query, HTTPException, Body
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import pandas as pd
 import numpy as np
+import joblib
 
-import datetime
-from src.data.load_data import (
-    load_routes, load_trips, load_hourly_demand,
-    load_model_data, load_allocations, load_seasonal_scenarios,
-    load_disruption_scenarios
-)
-from src.models.bunching_model import load_bunching_model
-from src.models.demand_model import load_demand_model
-from src.services.forecasting_service import predict_2027_demand_for_hour, get_2026_vs_2027_comparison
-from src.optimization.constraints import RouteAllocationInput
-from src.optimization.allocation_optimizer import optimize_bus_allocation
-from src.optimization.scenario_simulator import run_what_if_simulation
-from config.settings import DATA_DIR, REPORTS_DIR
-
-app = FastAPI(title="Demand Based Public Transport Planning System API", version="2.0.0")
+app = FastAPI(title="Demand-Based Public Transport Planning System API", version="3.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -38,842 +26,827 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Geographic Coordinates & Topology for Tamil Nadu 14 Corridors
-CORRIDOR_GEO = {
-    "TN01": {
-        "city": "Chennai",
-        "origin": {"name": "Tambaram", "lat": 12.9249, "lng": 80.1000},
-        "destination": {"name": "Guindy", "lat": 13.0067, "lng": 80.2025},
-        "waypoints": [[12.9249, 80.1000], [12.9516, 80.1412], [12.9798, 80.1705], [13.0067, 80.2025]],
-        "color": "#06b6d4"
-    },
-    "TN02": {
-        "city": "Chennai",
-        "origin": {"name": "Broadway", "lat": 13.0878, "lng": 80.2885},
-        "destination": {"name": "T. Nagar", "lat": 13.0418, "lng": 80.2341},
-        "waypoints": [[13.0878, 80.2885], [13.0732, 80.2608], [13.0550, 80.2450], [13.0418, 80.2341]],
-        "color": "#3b82f6"
-    },
-    "TN03": {
-        "city": "Chennai",
-        "origin": {"name": "Koyambedu", "lat": 13.0694, "lng": 80.1948},
-        "destination": {"name": "Sholinganallur (OMR)", "lat": 12.9010, "lng": 80.2279},
-        "waypoints": [[13.0694, 80.1948], [13.0200, 80.2100], [12.9600, 80.2400], [12.9010, 80.2279]],
-        "color": "#8b5cf6"
-    },
-    "TN04": {
-        "city": "Intercity",
-        "origin": {"name": "Kilambakkam KCBT", "lat": 12.8465, "lng": 80.0543},
-        "destination": {"name": "Tiruchirappalli", "lat": 10.7905, "lng": 78.7047},
-        "waypoints": [[12.8465, 80.0543], [12.2300, 79.5600], [11.9400, 79.4900], [11.1400, 79.0700], [10.7905, 78.7047]],
-        "color": "#10b981"
-    },
-    "TN05": {
-        "city": "Intercity",
-        "origin": {"name": "Kilambakkam KCBT", "lat": 12.8465, "lng": 80.0543},
-        "destination": {"name": "Madurai", "lat": 9.9252, "lng": 78.1198},
-        "waypoints": [[12.8465, 80.0543], [11.9400, 79.4900], [10.7905, 78.7047], [10.3600, 78.0000], [9.9252, 78.1198]],
-        "color": "#f59e0b"
-    },
-    "TN06": {
-        "city": "Intercity",
-        "origin": {"name": "Kilambakkam KCBT", "lat": 12.8465, "lng": 80.0543},
-        "destination": {"name": "Coimbatore", "lat": 11.0168, "lng": 76.9558},
-        "waypoints": [[12.8465, 80.0543], [12.2300, 79.0700], [11.6643, 78.1460], [11.3410, 77.7172], [11.0168, 76.9558]],
-        "color": "#ec4899"
-    },
-    "TN07": {
-        "city": "Intercity",
-        "origin": {"name": "Kilambakkam KCBT", "lat": 12.8465, "lng": 80.0543},
-        "destination": {"name": "Salem", "lat": 11.6643, "lng": 78.1460},
-        "waypoints": [[12.8465, 80.0543], [12.2300, 79.0700], [12.0000, 78.6000], [11.6643, 78.1460]],
-        "color": "#14b8a6"
-    },
-    "TN08": {
-        "city": "Intercity",
-        "origin": {"name": "Kilambakkam KCBT", "lat": 12.8465, "lng": 80.0543},
-        "destination": {"name": "Tirunelveli", "lat": 8.7139, "lng": 77.7567},
-        "waypoints": [[12.8465, 80.0543], [10.7905, 78.7047], [9.9252, 78.1198], [9.1700, 77.8700], [8.7139, 77.7567]],
-        "color": "#a855f7"
-    },
-    "TN09": {
-        "city": "Coimbatore",
-        "origin": {"name": "Gandhipuram", "lat": 11.0183, "lng": 76.9678},
-        "destination": {"name": "Saravanampatti", "lat": 11.0827, "lng": 76.9946},
-        "waypoints": [[11.0183, 76.9678], [11.0450, 76.9790], [11.0650, 76.9880], [11.0827, 76.9946]],
-        "color": "#06b6d4"
-    },
-    "TN10": {
-        "city": "Coimbatore",
-        "origin": {"name": "Ukkadam", "lat": 10.9904, "lng": 76.9614},
-        "destination": {"name": "Pollachi", "lat": 10.6609, "lng": 77.0048},
-        "waypoints": [[10.9904, 76.9614], [10.8700, 76.9800], [10.7600, 76.9950], [10.6609, 77.0048]],
-        "color": "#10b981"
-    },
-    "TN11": {
-        "city": "Madurai",
-        "origin": {"name": "Periyar Bus Stand", "lat": 9.9175, "lng": 78.1153},
-        "destination": {"name": "Thirumangalam", "lat": 9.8236, "lng": 77.9863},
-        "waypoints": [[9.9175, 78.1153], [9.8800, 78.0700], [9.8500, 78.0300], [9.8236, 77.9863]],
-        "color": "#f59e0b"
-    },
-    "TN12": {
-        "city": "Tiruchirappalli",
-        "origin": {"name": "Central Bus Stand", "lat": 10.7946, "lng": 78.6854},
-        "destination": {"name": "Srirangam", "lat": 10.8624, "lng": 78.6946},
-        "waypoints": [[10.7946, 78.6854], [10.8200, 78.6900], [10.8450, 78.6920], [10.8624, 78.6946]],
-        "color": "#6366f1"
-    },
-    "TN13": {
-        "city": "Salem",
-        "origin": {"name": "New Bus Stand", "lat": 11.6683, "lng": 78.1362},
-        "destination": {"name": "Erode", "lat": 11.3410, "lng": 77.7172},
-        "waypoints": [[11.6683, 78.1362], [11.5500, 78.0000], [11.4500, 77.8600], [11.3410, 77.7172]],
-        "color": "#38bdf8"
-    },
-    "TN14": {
-        "city": "Tirunelveli",
-        "origin": {"name": "New Bus Stand", "lat": 8.7139, "lng": 77.7567},
-        "destination": {"name": "Tiruchendur", "lat": 8.4975, "lng": 78.1238},
-        "waypoints": [[8.7139, 77.7567], [8.6500, 77.8900], [8.5700, 78.0100], [8.4975, 78.1238]],
-        "color": "#2dd4bf"
+# ---------------------------------------------------------
+# 1. LOAD MODELS & DATASETS
+# ---------------------------------------------------------
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(BASE_DIR, "cleaned_data")
+
+# Load Datasets from cleaned_data/
+ROUTES_DF = pd.read_csv(os.path.join(DATA_DIR, "route_master.csv"))
+DEMAND_DF = pd.read_csv(os.path.join(DATA_DIR, "hourly_demand_operations.csv"), low_memory=False)
+TRIPS_DF = pd.read_csv(os.path.join(DATA_DIR, "trip_operations.csv"), low_memory=False)
+CALENDAR_DF = pd.read_csv(os.path.join(DATA_DIR, "calendar_events.csv"))
+
+# Clean and normalize service_class strings
+for df in [ROUTES_DF, DEMAND_DF, TRIPS_DF]:
+    if "service_class" in df.columns:
+        df["service_class"] = df["service_class"].astype(str).str.strip()
+    if "route_id" in df.columns:
+        df["route_id"] = df["route_id"].astype(str).str.strip()
+    if "bus_type" in df.columns:
+        df["bus_type"] = df["bus_type"].astype(str).str.strip()
+
+# Day of week mapping
+DAY_MAP = {'Monday': 0, 'Tuesday': 1, 'Wednesday': 2, 'Thursday': 3, 'Friday': 4, 'Saturday': 5, 'Sunday': 6}
+
+# Load Saved Machine Learning Models
+RF_CLASSIFIER_PATH = os.path.join(BASE_DIR, "models", "classification", "random_forest_classifier.joblib")
+RF_REGRESSOR_PATH = os.path.join(BASE_DIR, "models", "regression", "random_forest_regressor.joblib")
+
+RF_CLASSIFIER = None
+RF_REGRESSOR = None
+
+if os.path.exists(RF_CLASSIFIER_PATH):
+    try:
+        RF_CLASSIFIER = joblib.load(RF_CLASSIFIER_PATH)
+        print(f"[ML] Successfully loaded Bunching Classifier from {RF_CLASSIFIER_PATH}")
+    except Exception as e:
+        print(f"[ML ERROR] Could not load Bunching Classifier: {e}")
+
+if os.path.exists(RF_REGRESSOR_PATH):
+    try:
+        RF_REGRESSOR = joblib.load(RF_REGRESSOR_PATH)
+        print(f"[ML] Successfully loaded Demand Regressor from {RF_REGRESSOR_PATH}")
+    except Exception as e:
+        print(f"[ML ERROR] Could not load Demand Regressor: {e}")
+
+AVAILABLE_DATES = sorted(DEMAND_DF["date"].unique().tolist())
+AVAILABLE_HOURS = sorted(DEMAND_DF["hour_int"].unique().tolist())
+APPROVED_DIRECTIVES: List[Dict[str, Any]] = []
+
+# Route metadata lookup dictionary
+ROUTE_INFO = {}
+for _, r in ROUTES_DF.iterrows():
+    ROUTE_INFO[r["route_id"]] = {
+        "route_id": r["route_id"],
+        "route_name": r["route_name"],
+        "service_class": r["service_class"],
+        "origin": r["origin"],
+        "destination": r["destination"],
+        "distance_km": float(r["distance_km"]),
+        "bus_type": r["bus_type"],
+        "capacity_per_bus": int(r["capacity_per_bus"]),
+        "base_buses": int(r["base_buses"]),
+        "minimum_service_bus_count": int(r["minimum_service_bus_count"])
     }
-}
 
-def get_corridor_capacity(corridor_type: str, base_seats: int = 50):
-    """
-    Computes seated, legal standee allowance, and total carrying capacity based on real-world transit operations:
-    - Urban commuter (Chennai MTC, Coimbatore city, Madurai city, Trichy): 30% standee allowance (15 standees -> 65 total carrying capacity).
-    - Regional commuter: 20% standee allowance (10 standees -> 60 total carrying capacity).
-    - Intercity express (SETC long distance): 0 standees (seated only -> 50 total capacity).
-    """
-    ctype = str(corridor_type)
-    if "Urban" in ctype or "commuter" in ctype.lower() or "commercial" in ctype.lower() or "IT" in ctype:
-        standees = int(round(base_seats * 0.30))  # 15 standees
-    elif "Regional" in ctype:
-        standees = int(round(base_seats * 0.20))  # 10 standees
-    else:
-        standees = 0  # 0 for Intercity
-    return base_seats, standees, base_seats + standees
-
-# Cache Data (Optimized for low-RAM deployment)
-ROUTES_DF = load_routes()
-MODEL_DF = load_model_data()
-TRIPS_DF = load_trips()
-
-# Load Trained Machine Learning Models
-try:
-    BUNCHING_PIPE, BUNCHING_META = load_bunching_model()
-except Exception as e:
-    BUNCHING_PIPE, BUNCHING_META = None, None
-
-# Available dates and hours (derived from compact MODEL_DF)
-AVAILABLE_DATES = sorted(MODEL_DF["date"].unique().tolist())
-AVAILABLE_DATES_2027 = [
-    (datetime.date(2027, 1, 1) + datetime.timedelta(days=i)).strftime("%Y-%m-%d")
-    for i in range(365)
-]
-AVAILABLE_HOURS = sorted(int(h) for h in MODEL_DF["hour"].unique().tolist())
-
-@app.get("/api/meta")
-def get_metadata():
-    """Returns available modes, dates, hours, and cities for dashboard filters."""
-    cities = ["All Tamil Nadu", "Chennai", "Coimbatore", "Madurai", "Intercity", "Regional"]
+# ---------------------------------------------------------
+# 2. FILTER & METADATA ENDPOINT
+# ---------------------------------------------------------
+@app.get("/api/filters")
+def get_filters():
+    """Returns available dates, hours, routes, and service classes for the compact filter bar."""
+    routes_list = []
+    for _, r in ROUTES_DF.iterrows():
+        routes_list.append({
+            "route_id": r["route_id"],
+            "route_name": r["route_name"],
+            "service_class": r["service_class"],
+            "bus_type": r["bus_type"],
+            "origin": r["origin"],
+            "destination": r["destination"]
+        })
     return {
-        "modes": [
-            {
-                "id": "historical_2026",
-                "label": "Historical Analysis — 2026",
-                "year": 2026,
-                "badge": "HISTORICAL 2026",
-                "status_text": "Data Source: Synthetic Transport Dataset | Historical Year: 2026"
-            },
-            {
-                "id": "forecast_2027",
-                "label": "Future Demand Forecast — 2027",
-                "year": 2027,
-                "badge": "AI FORECAST 2027",
-                "status_text": "Forecast Year: 2027 | Forecast Basis: Trained Model Using Synthetic 2026 Data"
-            }
-        ],
-        "default_mode": "historical_2026",
-        "dates_2026": AVAILABLE_DATES,
-        "dates_2027": AVAILABLE_DATES_2027,
         "dates": AVAILABLE_DATES,
-        "default_date": AVAILABLE_DATES[min(120, len(AVAILABLE_DATES)-1)],
-        "default_date_2027": "2027-05-15",
+        "default_date": AVAILABLE_DATES[0] if AVAILABLE_DATES else "2026-01-01",
         "hours": AVAILABLE_HOURS,
         "default_hour": 8,
-        "cities": cities,
-        "total_corridors": len(ROUTES_DF)
+        "service_classes": ["All", "Local", "Regional", "Intercity"],
+        "routes": routes_list
     }
 
-@app.get("/api/forecast/compare")
-def get_forecast_comparison_endpoint(city: Optional[str] = "All Tamil Nadu"):
-    """Returns 2026 vs 2027 comparative analysis (monthly lines, route deltas, heatmap)."""
-    return get_2026_vs_2027_comparison(city)
-
-@app.get("/api/corridors")
-def get_corridors(city: Optional[str] = "All Tamil Nadu"):
-    """Returns full corridor profiles with coordinates, distance, and base capacity."""
-    routes_list = []
-    for _, row in ROUTES_DF.iterrows():
-        rid = row["route_id"]
-        geo = CORRIDOR_GEO.get(rid, {})
-        row_city = row["city_or_origin_city"]
-        
-        # Filter by city if requested
-        if city and city != "All Tamil Nadu":
-            if city == "Intercity" and row["corridor_type"] != "Intercity":
-                continue
-            elif city == "Regional" and "Regional" not in row["corridor_type"]:
-                continue
-            elif city in ["Chennai", "Coimbatore", "Madurai"] and row_city != city:
-                continue
-
-        routes_list.append({
-            "route_id": rid,
-            "city": row_city,
-            "origin": row["origin_terminal_or_area"],
-            "destination": row["destination_terminal_or_area"],
-            "corridor_type": row["corridor_type"],
-            "distance_km": float(row["approx_distance_km_synthetic"]),
-            "bus_capacity": int(row["assumed_bus_capacity"]),
-            "base_demand_factor": float(row["base_demand_factor_synthetic"]),
-            "geo": geo
-        })
-    return routes_list
-
-@app.get("/api/overview")
-def get_overview(
-    date: str = Query(...),
-    hour: int = Query(...),
-    city: Optional[str] = "All Tamil Nadu",
-    mode: Optional[str] = "historical_2026",
-    year: Optional[int] = 2026
+# ---------------------------------------------------------
+# 3. MODULE 1: BUS BUNCHING PREDICTION
+# ---------------------------------------------------------
+@app.get("/api/bunching")
+def get_bunching_prediction(
+    date: str = "2026-01-01",
+    hour: int = 8,
+    service_class: str = "All",
+    route_id: Optional[str] = None
 ):
-    """Calculates live KPI strip, priority corridor watchlist, and active bus status with Historical/Forecast mode support."""
-    is_forecast = (mode == "forecast_2027") or (date.startswith("2027")) or (year == 2027)
-    
-    pred_2027_df = None
-    if is_forecast:
-        pred_2027_df = predict_2027_demand_for_hour(date, hour)
-        try:
-            dt = datetime.datetime.strptime(date, "%Y-%m-%d").date()
-            m_idx = dt.month
-            dow_str = dt.strftime("%A")
-            hour_model = MODEL_DF[(MODEL_DF["month"] == m_idx) & (MODEL_DF["day_of_week"] == dow_str) & (MODEL_DF["hour"] == hour)]
-            if hour_model.empty:
-                hour_model = MODEL_DF[(MODEL_DF["month"] == m_idx) & (MODEL_DF["hour"] == hour)]
-            if hour_model.empty:
-                hour_model = MODEL_DF[MODEL_DF["hour"] == hour].head(14)
-            matching_dates = hour_model["date"].unique()
-            hour_trips = TRIPS_DF[(TRIPS_DF["date"].isin(matching_dates)) & (TRIPS_DF["hour"] == hour)]
-            if hour_trips.empty:
-                hour_trips = TRIPS_DF[TRIPS_DF["hour"] == hour].head(14)
-        except Exception:
-            hour_model = MODEL_DF[MODEL_DF["hour"] == hour].head(14)
-            hour_trips = TRIPS_DF[TRIPS_DF["hour"] == hour].head(14)
-    else:
-        hour_model = MODEL_DF[(MODEL_DF["date"] == date) & (MODEL_DF["hour"] == hour)]
-        hour_trips = TRIPS_DF[(TRIPS_DF["date"] == date) & (TRIPS_DF["hour"] == hour)]
+    """
+    Evaluates trip-level headway telemetry using the trained Random Forest Classifier.
+    Predicts: Bunching (Class 1) or Not Bunching (Class 0) with continuous probability.
+    """
+    # Filter trip records
+    mask = (TRIPS_DF["date"] == str(date)) & (TRIPS_DF["hour_int"] == int(hour))
+    if service_class and service_class != "All" and isinstance(service_class, str):
+        mask = mask & (TRIPS_DF["service_class"] == service_class)
+    if route_id and route_id != "All" and isinstance(route_id, str):
+        mask = mask & (TRIPS_DF["route_id"] == route_id)
+
+    matched_trips = TRIPS_DF[mask].copy()
+
+    # Fallback to closest available trips if date has no trips for that hour
+    if matched_trips.empty:
+        mask_fallback = TRIPS_DF["hour_int"] == hour
+        if service_class and service_class != "All":
+            mask_fallback = mask_fallback & (TRIPS_DF["service_class"] == service_class)
+        if route_id and route_id != "All":
+            mask_fallback = mask_fallback & (TRIPS_DF["route_id"] == route_id)
+        matched_trips = TRIPS_DF[mask_fallback].head(30).copy()
+
+    trip_results = []
+    bunching_count = 0
+    total_trips = len(matched_trips)
+
+    if not matched_trips.empty and RF_CLASSIFIER is not None:
+        # Prepare exact feature columns used during model training
+        # Features: ['hour_int', 'scheduled_headway_min', 'actual_headway_min', 'departure_delay_min', 'headway_deviation_min', 'headway_ratio']
+        feat_cols = getattr(RF_CLASSIFIER, "feature_names_in_", [
+            'hour_int', 'scheduled_headway_min', 'actual_headway_min',
+            'departure_delay_min', 'headway_deviation_min', 'headway_ratio'
+        ])
         
-        if hour_model.empty:
-            hour_model = MODEL_DF[MODEL_DF["hour"] == hour].head(14)
-            hour_trips = TRIPS_DF[TRIPS_DF["hour"] == hour].head(14)
+        # Ensure auxiliary ratio columns exist
+        if "headway_deviation_min" not in matched_trips.columns:
+            matched_trips["headway_deviation_min"] = matched_trips["actual_headway_min"] - matched_trips["scheduled_headway_min"]
+        if "headway_ratio" not in matched_trips.columns:
+            matched_trips["headway_ratio"] = matched_trips["actual_headway_min"] / np.maximum(0.1, matched_trips["scheduled_headway_min"])
+        if "is_delayed" not in matched_trips.columns:
+            matched_trips["is_delayed"] = (matched_trips["departure_delay_min"] > 5.0).astype(int)
+        if "delay_ratio" not in matched_trips.columns:
+            matched_trips["delay_ratio"] = matched_trips["departure_delay_min"] / np.maximum(1.0, matched_trips["scheduled_headway_min"])
 
-    # Machine Learning Inference: Predict bunching risk probabilities using Random Forest Classifier
-    model_bunching_probs = {}
-    if BUNCHING_PIPE is not None and not hour_model.empty:
-        try:
-            raw_probs = BUNCHING_PIPE.predict_proba(hour_model)[:, 1]
-            model_bunching_probs = dict(zip(hour_model["route_id"], raw_probs))
-        except Exception as e:
-            model_bunching_probs = {}
+        X_eval = matched_trips[feat_cols].copy().fillna(0)
+        preds = RF_CLASSIFIER.predict(X_eval)
+        probas = RF_CLASSIFIER.predict_proba(X_eval)[:, 1]
 
-    total_demand = 0.0
-    total_capacity = 0.0
-    total_active_buses = 0
-    bunching_high_count = 0
-    bunching_medium_count = 0
-    watchlist = []
-    
-    # Corridor details
-    for _, r in ROUTES_DF.iterrows():
-        rid = r["route_id"]
-        geo = CORRIDOR_GEO.get(rid, {})
-        row_city = r["city_or_origin_city"]
-        
-        # City filter
-        if city and city != "All Tamil Nadu":
-            if city == "Intercity" and r["corridor_type"] != "Intercity":
-                continue
-            elif city == "Regional" and "Regional" not in r["corridor_type"]:
-                continue
-            elif city in ["Chennai", "Coimbatore", "Madurai"] and row_city != city:
-                continue
+        for i, (_, row) in enumerate(matched_trips.iterrows()):
+            rid = row["route_id"]
+            r_meta = ROUTE_INFO.get(rid, {})
+            is_bunching = int(preds[i]) == 1
+            prob = float(probas[i])
+            if is_bunching:
+                bunching_count += 1
 
-        base_seats = int(r["assumed_bus_capacity"])
-        seats, standees, total_bus_cap = get_corridor_capacity(r["corridor_type"], base_seats)
+            sched_h = float(row["scheduled_headway_min"])
+            actual_h = float(row["actual_headway_min"])
+            delay = float(row["departure_delay_min"])
+            headway_gap = actual_h - sched_h
 
-        if is_forecast and pred_2027_df is not None:
-            r_match = pred_2027_df[pred_2027_df["route_id"] == rid]
-            pax_demand = float(r_match["predicted_demand"].values[0]) if not r_match.empty else 160.0
-            active_buses = int(r_match["buses_scheduled_synthetic"].values[0]) if not r_match.empty else 4
-            t_row = hour_trips[hour_trips["route_id"] == rid] if not hour_trips.empty else pd.DataFrame()
-            m_row = hour_model[hour_model["route_id"] == rid] if not hour_model.empty else pd.DataFrame()
-        else:
-            m_row = hour_model[hour_model["route_id"] == rid]
-            t_row = hour_trips[hour_trips["route_id"] == rid]
-            
-            pax_demand = float(m_row["passenger_count_synthetic"].values[0]) if not m_row.empty else 180.0
-            active_buses = int(m_row["buses_scheduled_synthetic"].values[0]) if not m_row.empty else 4
-        
-        total_pax_capacity = active_buses * total_bus_cap
-        total_seat_capacity = active_buses * seats
-        total_standee_capacity = active_buses * standees
-        
-        deficit = pax_demand - total_pax_capacity
-        utilization = (pax_demand / total_pax_capacity * 100) if total_pax_capacity > 0 else 100.0
-        
-        # Bunching Risk Probability
-        if rid in model_bunching_probs:
-            bunching_prob = float(model_bunching_probs[rid])
-        elif not is_forecast and not m_row.empty and "bunching_risk_label_synthetic" in m_row.columns:
-            label_val = float(m_row["bunching_risk_label_synthetic"].values[0])
-            bunching_prob = 0.75 if label_val == 1.0 else (0.42 if utilization > 95 else 0.12)
-        elif utilization > 110:
-            bunching_prob = 0.72
-        elif utilization > 90:
-            bunching_prob = 0.45
-        else:
-            bunching_prob = 0.12
-            
-        risk_level = "High" if bunching_prob >= 0.60 else ("Medium" if bunching_prob >= 0.35 else "Low")
-        if risk_level == "High":
-            bunching_high_count += 1
-        elif risk_level == "Medium":
-            bunching_medium_count += 1
-            
-        total_demand += pax_demand
-        total_capacity += total_pax_capacity
-        total_active_buses += active_buses
-        
-        # Create simulated active buses for this corridor
-        bus_markers = []
-        waypoints = geo.get("waypoints", [])
-        if len(waypoints) >= 2:
-            for b_idx in range(active_buses):
-                fraction = (b_idx + 0.3) / max(1, active_buses)
-                p1 = waypoints[0]
-                p2 = waypoints[-1]
-                lat = p1[0] + fraction * (p2[0] - p1[0])
-                lng = p1[1] + fraction * (p2[1] - p1[1])
-                bus_markers.append({
-                    "bus_id": f"TN-{rid}-{101 + b_idx}",
-                    "lat": round(lat, 5),
-                    "lng": round(lng, 5),
-                    "capacity": total_bus_cap,
-                    "seats": seats,
-                    "standees": standees,
-                    "load_estimate": min(total_bus_cap, int(pax_demand / max(1, active_buses))),
-                    "status": "In Service"
-                })
+            advisory = "Normal operations. Headway gap maintained."
+            if is_bunching:
+                advisory = f"Hold trailing bus by 3-5 min at terminal to restore {sched_h:.0f}m gap."
+            elif delay > 8:
+                advisory = "Departure delayed. Monitor terminal dispatch interval."
 
-        # Scheduled & Observed Headways
-        ctype = r["corridor_type"]
-        if "Urban" in ctype:
-            base_sched_headway = round(60.0 / max(2, active_buses), 1)
-        elif "Regional" in ctype:
-            base_sched_headway = round(90.0 / max(2, active_buses), 1)
-        else:
-            base_sched_headway = round(120.0 / max(2, active_buses), 1)
+            trip_results.append({
+                "trip_id": row["trip_id"],
+                "route_id": rid,
+                "route_name": r_meta.get("route_name", rid),
+                "service_class": row["service_class"],
+                "bus_type": row.get("bus_type", r_meta.get("bus_type", "Normal")),
+                "scheduled_headway": round(sched_h, 1),
+                "actual_headway": round(actual_h, 1),
+                "departure_delay": round(delay, 1),
+                "headway_gap": round(headway_gap, 1),
+                "prediction": "Bunching" if is_bunching else "Not Bunching",
+                "bunching_probability": round(prob * 100, 1),
+                "risk_badge": "High Risk" if is_bunching else ("Medium Risk" if prob > 0.4 else "Normal"),
+                "advisory": advisory
+            })
 
-        if not t_row.empty and "scheduled_headway_min_synthetic" in t_row.columns and "actual_headway_min_synthetic" in t_row.columns:
-            base_sched_headway = float(t_row["scheduled_headway_min_synthetic"].values[0])
-            obs_headway = float(t_row["actual_headway_min_synthetic"].values[0])
-        else:
-            if risk_level == "High":
-                obs_headway = round(max(3.5, base_sched_headway * 0.25), 1)
-            elif risk_level == "Medium":
-                obs_headway = round(base_sched_headway * 1.45, 1)
-            else:
-                obs_headway = round(base_sched_headway * 0.98, 1)
+    # Sort so bunching trips appear first
+    trip_results.sort(key=lambda x: (x["prediction"] != "Bunching", -x["bunching_probability"]))
 
-        watchlist.append({
+    # Route-level risk aggregation for compact chart
+    route_risk = {}
+    for t in trip_results:
+        rid = t["route_id"]
+        if rid not in route_risk:
+            route_risk[rid] = {"route_id": rid, "route_name": t["route_name"], "probs": []}
+        route_risk[rid]["probs"].append(t["bunching_probability"])
+
+    route_chart_data = []
+    for rid, val in route_risk.items():
+        avg_prob = round(sum(val["probs"]) / len(val["probs"]), 1)
+        route_chart_data.append({
             "route_id": rid,
-            "origin": r["origin_terminal_or_area"],
-            "destination": r["destination_terminal_or_area"],
-            "city": row_city,
-            "corridor_type": r["corridor_type"],
-            "passenger_demand": round(pax_demand, 1),
-            "allocated_buses": active_buses,
-            "seat_capacity": total_seat_capacity,
-            "standee_capacity": total_standee_capacity,
-            "total_capacity": total_pax_capacity,
-            "bus_capacity": total_bus_cap,
-            "bus_seats": seats,
-            "bus_standees": standees,
-            "capacity_deficit": round(deficit, 1),
-            "utilization_pct": round(utilization, 1),
-            "bunching_probability": round(bunching_prob, 3),
-            "risk_level": risk_level,
-            "scheduled_headway": round(base_sched_headway, 1),
-            "observed_headway": round(obs_headway, 1),
-            "geo": geo,
-            "active_bus_markers": bus_markers
+            "route_name": val["route_name"],
+            "avg_bunching_prob": avg_prob,
+            "is_bunching": avg_prob >= 50.0
         })
+    route_chart_data.sort(key=lambda x: x["avg_bunching_prob"], reverse=True)
 
-    # Sort watchlist by deficit descending
-    watchlist.sort(key=lambda x: x["capacity_deficit"], reverse=True)
-    
-    # On-time performance estimate based on bunching rate
-    on_time_pct = round(max(70.0, 96.5 - (bunching_high_count * 2.8 + bunching_medium_count * 1.1)), 1)
-    
+    bunching_rate = round((bunching_count / max(1, total_trips)) * 100, 1)
+
     return {
         "date": date,
         "hour": hour,
-        "mode": "forecast_2027" if is_forecast else "historical_2026",
-        "year": 2027 if is_forecast else 2026,
-        "data_provenance": "Forecast Year: 2027 | Forecast Basis: Trained Model Using Synthetic 2026 Data" if is_forecast else "Data Source: Synthetic Transport Dataset | Historical Year: 2026",
-        "is_simulated_forecast": is_forecast,
-        "disclaimer": "Simulated Forecast Based on Synthetic 2026 Data" if is_forecast else "",
-        "kpis": {
-            "total_active_buses": total_active_buses,
-            "total_passenger_demand": round(total_demand),
-            "total_seat_capacity": round(total_capacity),
-            "net_capacity_deficit": round(sum(w["capacity_deficit"] for w in watchlist if w["capacity_deficit"] > 0)),
-            "on_time_performance_pct": on_time_pct,
-            "high_bunching_alerts": bunching_high_count,
-            "medium_bunching_alerts": bunching_medium_count,
-            "monitored_corridors": len(watchlist),
-            "routes_requiring_capacity": len([w for w in watchlist if w["capacity_deficit"] > 0])
+        "service_class": service_class,
+        "route_id": route_id or "All",
+        "summary": {
+            "total_trips": total_trips,
+            "bunching_count": bunching_count,
+            "normal_count": total_trips - bunching_count,
+            "bunching_rate_pct": bunching_rate,
+            "system_status": "CRITICAL" if bunching_count > 2 else ("WARNING" if bunching_count > 0 else "STABLE")
         },
-        "corridors": watchlist
+        "route_chart": route_chart_data[:8],
+        "trips": trip_results
     }
 
-class OptimizerRequest(BaseModel):
-    date: str
-    hour: int
-    conserve_exact_fleet: bool = True
-    fleet_adjustment: int = 0
-    min_service_buses: int = 2
-    mode: Optional[str] = "historical_2026"
-    year: Optional[int] = 2026
-
-@app.post("/api/optimize")
-def run_optimization(req: OptimizerRequest):
+# ---------------------------------------------------------
+# 4. MODULE 2: PASSENGER DEMAND PREDICTION
+# ---------------------------------------------------------
+@app.get("/api/demand")
+def get_demand_prediction(
+    date: str = "2026-01-01",
+    hour: int = 8,
+    service_class: str = "All",
+    route_id: Optional[str] = None
+):
     """
-    Executes Google OR-Tools MILP to reallocate buses and produces
-    CONCRETE BUS SHIFT DIRECTIVES with distance, before/after shortage, and constraint validation status.
+    Predicts next-hour passenger demand using trained Random Forest Regressor.
+    Calculates capacity shortage: max(predicted_passenger_demand - total_capacity, 0).
     """
-    date = req.date
-    hour = req.hour
-    is_forecast = (req.mode == "forecast_2027") or (date.startswith("2027")) or (req.year == 2027)
-    
-    if is_forecast:
-        pred_2027_df = predict_2027_demand_for_hour(date, hour)
-        hour_slice = pd.DataFrame()
-    else:
-        pred_2027_df = None
-        hour_slice = MODEL_DF[(MODEL_DF["date"] == date) & (MODEL_DF["hour"] == hour)]
-        if hour_slice.empty:
-            hour_slice = MODEL_DF[MODEL_DF["hour"] == hour].head(14)
-    
-    inputs = []
-    route_meta = {}
-    
-    # Depot Cluster Mapping for Tamil Nadu Public Transport
-    ROUTE_CLUSTERS = {
-        "TN01": "Chennai-Urban",
-        "TN02": "Chennai-Urban",
-        "TN03": "Chennai-Urban",
-        "TN04": "Chennai-KCBT",
-        "TN05": "Chennai-KCBT",
-        "TN06": "Chennai-KCBT",
-        "TN07": "Chennai-KCBT",
-        "TN08": "Chennai-KCBT",
-        "TN09": "Coimbatore",
-        "TN10": "Coimbatore",
-        "TN11": "Madurai",
-        "TN12": "Trichy",
-        "TN13": "Salem",
-        "TN14": "Tirunelveli"
-    }
+    mask = (DEMAND_DF["date"] == str(date)) & (DEMAND_DF["hour_int"] == int(hour))
+    if service_class and service_class != "All" and isinstance(service_class, str):
+        mask = mask & (DEMAND_DF["service_class"] == service_class)
+    if route_id and route_id != "All" and isinstance(route_id, str):
+        mask = mask & (DEMAND_DF["route_id"] == route_id)
 
-    for _, r in ROUTES_DF.iterrows():
-        rid = r["route_id"]
-        base_seats = int(r["assumed_bus_capacity"])
-        seats, standees, total_bus_cap = get_corridor_capacity(r["corridor_type"], base_seats)
-        cluster_name = ROUTE_CLUSTERS.get(rid, r["city_or_origin_city"])
+    matched_demand = DEMAND_DF[mask].copy()
 
-        if is_forecast and pred_2027_df is not None:
-            r_match = pred_2027_df[pred_2027_df["route_id"] == rid]
-            pax_demand = float(r_match["predicted_demand"].values[0]) if not r_match.empty else 160.0
-            cur_buses = int(r_match["buses_scheduled_synthetic"].values[0]) if not r_match.empty else 4
+    # Fallback to closest hour
+    if matched_demand.empty:
+        mask_fallback = DEMAND_DF["hour_int"] == hour
+        if service_class and service_class != "All":
+            mask_fallback = mask_fallback & (DEMAND_DF["service_class"] == service_class)
+        if route_id and route_id != "All":
+            mask_fallback = mask_fallback & (DEMAND_DF["route_id"] == route_id)
+        matched_demand = DEMAND_DF[mask_fallback].head(12).copy()
+
+    # Check calendar for festival or holiday flags
+    cal_row = CALENDAR_DF[CALENDAR_DF["date"] == date]
+    holiday_name = "Regular Operations"
+    if not cal_row.empty:
+        fest = str(cal_row["festival_scenario"].values[0]).strip()
+        hol = str(cal_row["official_holiday_name"].values[0]).strip()
+        if fest and fest.lower() not in ["no_festival", "none", "nan", ""]:
+            holiday_name = f"Festival Window ({fest})"
+        elif hol and hol.lower() not in ["no_festival", "none", "nan", ""]:
+            holiday_name = f"Public Holiday ({hol})"
         else:
-            m_row = hour_slice[hour_slice["route_id"] == rid]
-            pax_demand = float(m_row["passenger_count_synthetic"].values[0]) if not m_row.empty else 160.0
-            cur_buses = int(m_row["buses_scheduled_synthetic"].values[0]) if not m_row.empty else 4
-        
-        route_meta[rid] = {
-            "origin": r["origin_terminal_or_area"],
-            "destination": r["destination_terminal_or_area"],
-            "city": r["city_or_origin_city"],
-            "capacity": total_bus_cap,
-            "seats": seats,
-            "standees": standees,
-            "cluster": cluster_name
-        }
-        
-        inputs.append(RouteAllocationInput(
-            route_id=rid,
-            corridor_name=f"{r['origin_terminal_or_area']} → {r['destination_terminal_or_area']}",
-            current_buses=cur_buses,
-            predicted_demand=pax_demand,
-            bus_capacity=total_bus_cap,
-            minimum_service_buses=max(1, req.min_service_buses),
-            depot_cluster=cluster_name
-        ))
+            holiday_name = "Regular Operations"
 
-    base_fleet_sum = sum(i.current_buses for i in inputs)
-    fleet_limit = max(sum(i.minimum_service_buses for i in inputs), base_fleet_sum + req.fleet_adjustment)
-    
-    result = optimize_bus_allocation(
-        inputs=inputs,
-        total_fleet_limit=fleet_limit,
-        conserve_exact_fleet=req.conserve_exact_fleet
-    )
-    
-    # Build Concrete Bus Shift Directives
-    # Identify donators (bus_change < 0) and receivers (bus_change > 0)
-    donators = []
-    receivers = []
-    
-    allocations_list = []
-    for alloc in result.route_allocations:
-        rid = alloc["route_id"]
-        meta = route_meta.get(rid, {})
-        change = alloc["reallocation_delta"]
-        shortage_before = alloc["shortage_before"]
-        shortage_after = alloc["shortage_after"]
-        shortage_reduction = max(0.0, shortage_before - shortage_after)
-        
-        alloc_data = {
-            "route_id": rid,
-            "origin": meta.get("origin", ""),
-            "destination": meta.get("destination", ""),
-            "city": meta.get("city", ""),
-            "cluster": meta.get("cluster", "General"),
-            "bus_capacity": meta.get("capacity", 65),
-            "seats": meta.get("seats", 50),
-            "standees": meta.get("standees", 15),
-            "predicted_demand": round(alloc["predicted_demand"], 1),
-            "current_buses": alloc["current_buses"],
-            "optimized_buses": alloc["recommended_buses"],
-            "bus_change": change,
-            "shortage_before": round(shortage_before, 1),
-            "shortage_after": round(shortage_after, 1),
-            "shortage_reduction": round(shortage_reduction, 1)
-        }
-        allocations_list.append(alloc_data)
-        
-        if change < 0:
-            for _ in range(abs(change)):
-                donators.append(alloc_data)
-        elif change > 0:
-            for _ in range(change):
-                receivers.append(alloc_data)
+    demand_results = []
+    total_predicted = 0.0
+    total_capacity = 0.0
+    total_shortage = 0.0
+    shortage_routes_count = 0
 
-    # Intra-cluster matching:
-    # A vehicle can ONLY be shifted between routes within the same depot/cluster (deadheading distance < 30km or shared depot)
-    # Inter-city shifts (e.g. Madurai to Trichy > 130km) are physically prohibited in public transit dispatch.
-    shift_directives = []
-    directive_counter = 1
-    all_clusters = set([d["cluster"] for d in donators] + [r["cluster"] for r in receivers])
-    
-    for c in all_clusters:
-        c_donors = [d for d in donators if d["cluster"] == c]
-        c_receivers = [r for r in receivers if r["cluster"] == c]
-        pair_count = min(len(c_donors), len(c_receivers))
-        
-        # Intra-cluster route-to-route transfers
-        for i in range(pair_count):
-            src = c_donors[i]
-            dst = c_receivers[i]
-            bus_id = f"TN-FLEET-{(1000 + directive_counter * 17) % 9000}"
-            shift_directives.append({
-                "directive_id": f"DIR-{directive_counter:03d}",
-                "bus_id": bus_id,
-                "bus_capacity": dst["bus_capacity"],
-                "source_route": src["route_id"],
-                "source_name": f"{src['origin']} → {src['destination']} ({src['city']})",
-                "target_route": dst["route_id"],
-                "target_name": f"{dst['origin']} → {dst['destination']} ({dst['city']})",
-                "cluster": c,
-                "feasibility": "Intra-Cluster Shift (< 25 km / Shared Depot)",
-                "relocation_distance": "< 25 km (Intra-Cluster Depot Zone)",
-                "shortage_before": dst["shortage_before"],
-                "shortage_after": dst["shortage_after"],
-                "constraint_validation": "Satisfied: Intra-cluster, Standee Allowed, Source Surplus Maintained",
-                "pax_relieved": min(dst["bus_capacity"], int(dst["shortage_before"])),
-                "reason": f"Alleviate passenger demand on {dst['route_id']}; relieved using surplus vehicle from {src['route_id']} within {c} depot zone.",
-                "urgency": "Immediate" if dst["shortage_before"] > 30 else "Routine"
+    if not matched_demand.empty and RF_REGRESSOR is not None:
+        # Prepare exact feature columns used during model training
+        feat_cols = getattr(RF_REGRESSOR, "feature_names_in_", [
+            'hour_int', 'hour_sin', 'hour_cos', 'day_of_week',
+            'is_weekend', 'is_friday', 'is_peak_hour', 'holiday_flag',
+            'rainfall_mm', 'construction_active',
+            'scheduled_bus_count', 'available_bus_count', 'total_capacity',
+            'passenger_demand', 'capacity_shortage',
+            'scheduled_headway_min', 'mean_actual_headway_min', 'mean_departure_delay_min'
+        ])
+
+        # Ensure features are present
+        if "hour_sin" not in matched_demand.columns:
+            matched_demand["hour_sin"] = np.sin(2 * np.pi * matched_demand["hour_int"] / 24)
+        if "hour_cos" not in matched_demand.columns:
+            matched_demand["hour_cos"] = np.cos(2 * np.pi * matched_demand["hour_int"] / 24)
+        if matched_demand["day_of_week"].dtype == object:
+            matched_demand["day_of_week"] = matched_demand["day_of_week"].map(DAY_MAP).fillna(0).astype(int)
+
+        X_eval = matched_demand[feat_cols].copy().fillna(0)
+        preds = RF_REGRESSOR.predict(X_eval)
+
+        for i, (_, row) in enumerate(matched_demand.iterrows()):
+            rid = row["route_id"]
+            r_meta = ROUTE_INFO.get(rid, {})
+            current_obs = float(row["passenger_demand"])
+            pred_demand = max(5.0, float(preds[i]))
+            cap = int(row["total_capacity"])
+            
+            # Integer passenger shortage: A real deficit exists only when rounded passenger demand exceeds seat capacity
+            rounded_demand = round(pred_demand)
+            shortage = max(0, rounded_demand - cap)
+            
+            utilization = round((pred_demand / max(1, cap)) * 100, 1)
+            if shortage == 0 and utilization > 100.0:
+                utilization = 100.0
+
+            if shortage >= 1:
+                shortage_routes_count += 1
+
+            total_predicted += pred_demand
+            total_capacity += cap
+            total_shortage += shortage
+
+            status = "Optimal"
+            if shortage >= 40:
+                status = "Severe Shortage"
+            elif shortage >= 1:
+                status = "Capacity Deficit"
+            elif utilization < 60:
+                status = "Surplus Capacity"
+
+            demand_results.append({
+                "route_id": rid,
+                "route_name": r_meta.get("route_name", rid),
+                "service_class": row["service_class"],
+                "bus_type": row.get("bus_type", r_meta.get("bus_type", "Normal")),
+                "current_observed_demand": round(current_obs, 1),
+                "predicted_next_hour_demand": round(pred_demand, 1),
+                "total_capacity": cap,
+                "capacity_shortage": int(shortage),
+                "utilization_pct": utilization,
+                "status": status,
+                "available_buses": int(row.get("available_bus_count", r_meta.get("base_buses", 4))),
+                "min_service_buses": int(row.get("minimum_service_bus_count", r_meta.get("minimum_service_bus_count", 2)))
             })
-            directive_counter += 1
 
-        # Additional buses deployed from depot reserve (e.g. to satisfy minimum service floor policy)
-        if len(c_receivers) > pair_count:
-            for dst in c_receivers[pair_count:]:
-                bus_id = f"TN-DEPOT-{(2000 + directive_counter * 13) % 9000}"
-                shift_directives.append({
-                    "directive_id": f"DIR-{directive_counter:03d}",
-                    "bus_id": bus_id,
-                    "bus_capacity": dst["bus_capacity"],
-                    "source_route": "DEPOT-STANDBY",
-                    "source_name": f"{dst['city']} Central Bus Depot",
-                    "target_route": dst["route_id"],
-                    "target_name": f"{dst['origin']} → {dst['destination']} ({dst['city']})",
-                    "cluster": c,
-                    "feasibility": "Depot Reserve Fleet Injection",
-                    "relocation_distance": "< 10 km (Depot to Terminal)",
-                    "shortage_before": dst["shortage_before"],
-                    "shortage_after": dst["shortage_after"],
-                    "constraint_validation": "Satisfied: Depot Standby Floor Maintenance",
-                    "pax_relieved": dst["bus_capacity"],
-                    "reason": f"Deployed reserve vehicle from {dst['city']} depot to satisfy minimum service frequency floor on {dst['route_id']}.",
-                    "urgency": "Routine"
-                })
-                directive_counter += 1
+    # Sort descending by shortage so priority deficit corridors appear first
+    demand_results.sort(key=lambda x: x["capacity_shortage"], reverse=True)
 
-        # Surplus buses recalled to depot (e.g. under negative fleet adjustment)
-        if len(c_donors) > pair_count:
-            for src in c_donors[pair_count:]:
-                bus_id = f"TN-FLEET-{(1000 + directive_counter * 17) % 9000}"
-                shift_directives.append({
-                    "directive_id": f"DIR-{directive_counter:03d}",
-                    "bus_id": bus_id,
-                    "bus_capacity": src["bus_capacity"],
-                    "source_route": src["route_id"],
-                    "source_name": f"{src['origin']} → {src['destination']} ({src['city']})",
-                    "target_route": "DEPOT-MAINTENANCE",
-                    "target_name": f"{src['city']} Central Maintenance Depot",
-                    "cluster": c,
-                    "feasibility": "Depot Standby Recall",
-                    "relocation_distance": "< 10 km (Terminal to Depot)",
-                    "shortage_before": src["shortage_before"],
-                    "shortage_after": src["shortage_after"],
-                    "constraint_validation": "Satisfied: Fleet Maintenance Conservation",
-                    "pax_relieved": 0,
-                    "reason": f"Recalled surplus vehicle from {src['route_id']} to {src['city']} depot for fleet maintenance/conservation.",
-                    "urgency": "Routine"
-                })
-                directive_counter += 1
-
-    status_msg = result.status_message
-    if len(shift_directives) == 0:
-        status_msg = "No feasible reallocation required or found: Fleet allocations already satisfy corridor constraints or are restricted by intra-cluster depot boundaries."
+    is_peak = hour in [8, 9, 10, 17, 18, 19]
 
     return {
-        "success": result.success,
-        "solver": result.solver_name,
-        "status_message": status_msg,
-        "mode": "forecast_2027" if is_forecast else "historical_2026",
+        "date": date,
+        "hour": hour,
+        "is_peak_hour": is_peak,
+        "calendar_status": holiday_name,
+        "service_class": service_class,
         "summary": {
-            "total_fleet_available": result.total_fleet_available,
-            "total_fleet_allocated": result.total_fleet_allocated,
-            "fleet_conserved": result.fleet_conserved,
-            "total_buses_shifted": len(shift_directives),
-            "total_shortage_before": round(result.total_shortage_before, 1),
-            "total_shortage_after": round(result.total_shortage_after, 1),
-            "shortage_reduction": round(result.shortage_reduction, 1),
-            "shortage_reduction_pct": round((result.shortage_reduction / max(1.0, result.total_shortage_before)) * 100, 1)
+            "total_predicted_demand": round(total_predicted),
+            "total_fleet_capacity": round(total_capacity),
+            "net_capacity_deficit": round(total_shortage),
+            "shortage_routes_count": shortage_routes_count,
+            "overall_utilization_pct": round((total_predicted / max(1, total_capacity)) * 100, 1)
         },
-        "shift_directives": shift_directives,
-        "allocations": allocations_list
+        "routes": demand_results
     }
 
-class SimulatorRequest(BaseModel):
+# ---------------------------------------------------------
+# 5. MODULE 3: FLEET ALLOCATION & REALLOCATION ENGINE
+# ---------------------------------------------------------
+class AllocationRequest(BaseModel):
     date: str
     hour: int
-    demand_multiplier: float = 1.0
-    fleet_adjustment: int = 0
-    disruption_level: str = "None" # "None", "Rain", "Roadworks", "Peak_Festival"
+    service_class: str = "All"
+    shortage_threshold: float = 20.0
 
-@app.post("/api/simulate")
-def run_simulation(req: SimulatorRequest):
-    """Runs What-If scenario simulations with interactive disruption and demand surge."""
-    date = req.date
-    hour = req.hour
-    
-    # Calculate extra demand surge multiplier
-    disruption_mult = 1.0
-    if req.disruption_level == "Rain":
-        disruption_mult = 1.25
-    elif req.disruption_level == "Roadworks":
-        disruption_mult = 1.15
-    elif req.disruption_level == "Peak_Festival":
-        disruption_mult = 1.60
+@app.post("/api/allocation")
+def get_fleet_allocation(req: AllocationRequest):
+    """
+    Transparent, constraint-based fleet reallocation engine.
+    Matches deficit destination routes with surplus compatible source routes.
+    Enforces minimum service constraints, vehicle compatibility, and distance limits.
+    """
+    demand_data = get_demand_prediction(req.date, req.hour, req.service_class)
+    routes = demand_data["routes"]
 
-    effective_mult = req.demand_multiplier * disruption_mult
-    
-    hour_slice = MODEL_DF[(MODEL_DF["date"] == date) & (MODEL_DF["hour"] == hour)]
-    if hour_slice.empty:
-        hour_slice = MODEL_DF[MODEL_DF["hour"] == hour].head(14)
-    
-    sim_results = []
-    total_sim_demand = 0.0
-    total_base_capacity = 0.0
-    
-    for _, r in ROUTES_DF.iterrows():
+    # Fleet Surplus Analysis: For every corridor, calculate if fewer buses are needed for its demand
+    fleet_surplus_analysis = []
+    for r in routes:
         rid = r["route_id"]
-        m_row = hour_slice[hour_slice["route_id"] == rid]
-        base_d = float(m_row["passenger_count_synthetic"].values[0]) if not m_row.empty else 160.0
-        cur_b = int(m_row["buses_scheduled_synthetic"].values[0]) if not m_row.empty else 4
-        base_seats = int(r["assumed_bus_capacity"])
-        seats, standees, total_bus_cap = get_corridor_capacity(r["corridor_type"], base_seats)
-        
-        sim_d = base_d * effective_mult
-        cur_cap = cur_b * total_bus_cap
-        sim_shortage = max(0.0, sim_d - cur_cap)
-        
-        total_sim_demand += sim_d
-        total_base_capacity += cur_cap
-        
-        sim_results.append({
+        rmeta = ROUTE_INFO.get(rid, {})
+        cur_buses = r["available_buses"]
+        min_buses = r["min_service_buses"]
+        cap_per_bus = rmeta.get("capacity_per_bus", 50)
+        pred_dem = r["predicted_next_hour_demand"]
+
+        # Minimum buses required to seat this predicted demand
+        buses_needed = max(min_buses, int(np.ceil(pred_dem / max(1, cap_per_bus))))
+        # Surplus buses above passenger need and statutory minimum
+        surplus_buses = max(0, cur_buses - buses_needed)
+
+        status_text = "Balanced Fleet"
+        if surplus_buses > 0:
+            status_text = f"{surplus_buses} Surplus Bus(es) Available to Shift"
+        elif r["capacity_shortage"] >= 1:
+            needed_extra = int(np.ceil(r["capacity_shortage"] / max(1, cap_per_bus)))
+            status_text = f"Deficit: Needs {needed_extra} Extra Bus(es)"
+
+        fleet_surplus_analysis.append({
             "route_id": rid,
-            "origin": r["origin_terminal_or_area"],
-            "destination": r["destination_terminal_or_area"],
-            "city": r["city_or_origin_city"],
-            "base_demand": round(base_d, 1),
-            "simulated_demand": round(sim_d, 1),
-            "active_buses": cur_b,
-            "capacity": cur_cap,
-            "seats": cur_b * seats,
-            "standees": cur_b * standees,
-            "shortage": round(sim_shortage, 1),
-            "stress_index": round((sim_d / max(1.0, cur_cap)), 2)
+            "route_name": r["route_name"],
+            "service_class": r["service_class"],
+            "bus_type": r["bus_type"],
+            "capacity_per_bus": cap_per_bus,
+            "current_buses": cur_buses,
+            "predicted_demand": round(pred_dem),
+            "buses_needed_for_demand": buses_needed,
+            "minimum_service_buses": min_buses,
+            "surplus_buses_available": surplus_buses,
+            "status": status_text
         })
 
-    # Sort bottlenecks
-    sim_results.sort(key=lambda x: x["stress_index"], reverse=True)
-    
+    # Identify deficit routes (destination routes needing capacity, minimum threshold >= 20 pax)
+    deficit_routes = [r for r in routes if r["capacity_shortage"] >= max(1.0, req.shortage_threshold)]
+
+    # Check available compatible reserve buses from operational schedule for this hour
+    hour_records = DEMAND_DF[(DEMAND_DF["date"] == str(req.date)) & (DEMAND_DF["hour_int"] == int(req.hour))]
+    reserve_pool = {
+        "Normal": 2 if 7 <= req.hour <= 20 else 0,
+        "AC": 1 if 7 <= req.hour <= 20 else 0,
+        "Sleeper": 1 if 18 <= req.hour <= 22 else 0
+    }
+    if not hour_records.empty and "reserve_bus_count" in hour_records.columns:
+        local_recs = hour_records[hour_records["service_class"] == "Local"]
+        if not local_recs.empty:
+            reserve_pool["Normal"] = int(local_recs["reserve_bus_count"].max())
+
+    # Track allocated donor buses to prevent a bus from being allocated to two routes simultaneously
+    allocated_from_donor = {}
+    recommendations = []
+    rec_counter = 1
+
+    for dst in deficit_routes:
+        dst_rid = dst["route_id"]
+        dst_meta = ROUTE_INFO.get(dst_rid, {})
+        dst_shortage = dst["capacity_shortage"]
+        dst_bus_type = dst["bus_type"]
+        dst_class = dst["service_class"]
+        dst_cap_per_bus = dst_meta.get("capacity_per_bus", 55)
+
+        matched = False
+
+        # PRIORITY 1: Search for Route-to-Route transfer from routes that have genuine SURPLUS BUSES
+        # When a route has e.g. 5 buses but all passengers fit into 3 or 4 buses, shift 1 surplus bus!
+        surplus_donor_candidates = [
+            f for f in fleet_surplus_analysis
+            if f["route_id"] != dst_rid and (f["surplus_buses_available"] - allocated_from_donor.get(f["route_id"], 0)) > 0
+        ]
+
+        for src in surplus_donor_candidates:
+            src_rid = src["route_id"]
+            src_meta = ROUTE_INFO.get(src_rid, {})
+            src_buses = src["current_buses"]
+            src_min = src["minimum_service_buses"]
+            src_bus_type = src["bus_type"]
+            src_class = src["service_class"]
+            src_already_donated = allocated_from_donor.get(src_rid, 0)
+
+            # CONSTRAINT 1: Source route must retain minimum service buses
+            if (src_buses - src_already_donated - 1) < src_min:
+                continue
+
+            # CONSTRAINT 2: Vehicle Compatibility & Service-Class Rules
+            if dst_class == "Intercity":
+                if src_class != "Intercity" or dst_bus_type != src_bus_type:
+                    continue
+            elif dst_class == "Local":
+                if src_class != "Local" or dst_bus_type != src_bus_type:
+                    continue
+            elif dst_class == "Regional":
+                if src_class not in ["Regional", "Local"] or dst_bus_type != src_bus_type:
+                    continue
+
+            # CONSTRAINT 3: Operational Distance Limit (within 60 km repositioning window)
+            dst_dist = dst_meta.get("distance_km", 40.0)
+            src_dist = src_meta.get("distance_km", 40.0)
+            if abs(dst_dist - src_dist) > 60.0:
+                continue
+
+            # CONSTRAINT 4: Donor route passenger coverage
+            src_cap_loss = src_meta.get("capacity_per_bus", 50)
+            remaining_cap = (src_buses - src_already_donated - 1) * src_cap_loss
+            if src["predicted_demand"] > remaining_cap:
+                continue
+
+            # All constraints satisfied -> FEASIBLE ROUTE-TO-ROUTE RECOMMENDATION
+            pax_relieved = min(dst_shortage, src_cap_loss)
+            allocated_from_donor[src_rid] = src_already_donated + 1
+
+            recommendations.append({
+                "recommendation_id": f"REC-{rec_counter:03d}",
+                "target_route_id": dst_rid,
+                "target_route_name": dst["route_name"],
+                "target_service_class": dst_class,
+                "predicted_shortage": round(dst_shortage),
+                "source_route_id": src_rid,
+                "source_route_name": f"{src['route_name']} (Surplus Fleet)",
+                "source_service_class": src_class,
+                "recommended_bus_type": src_bus_type,
+                "seats_relieved": int(pax_relieved),
+                "feasibility": "FEASIBLE",
+                "allocation_type": "Route-to-Route Shift",
+                "reason": f"Shifts 1 surplus {src_bus_type} bus from {src_rid} ({src['current_buses']} active buses, only {src['buses_needed_for_demand']} needed for {src['predicted_demand']} pax). Relieves shortage of {dst_shortage:.0f} pax on {dst_rid}.",
+                "constraints_checked": f"Donor {src_rid} retains {src_buses - allocated_from_donor[src_rid]} buses (>= min {src_min}); vehicle compatible; distance within operational range.",
+                "approval_status": "Pending Operator Approval"
+            })
+            rec_counter += 1
+            matched = True
+            break
+
+        if matched:
+            continue
+
+        # PRIORITY 2: Check compatible Standby Depot Reserve Bus if no route has surplus buses
+        if reserve_pool.get(dst_bus_type, 0) > 0 and (dst_class != "Intercity" or dst_bus_type in ["AC", "Normal"]):
+            reserve_pool[dst_bus_type] -= 1
+            pax_relieved = min(dst_shortage, dst_cap_per_bus)
+            recommendations.append({
+                "recommendation_id": f"REC-{rec_counter:03d}",
+                "target_route_id": dst_rid,
+                "target_route_name": dst["route_name"],
+                "target_service_class": dst_class,
+                "predicted_shortage": round(dst_shortage),
+                "source_route_id": "DEPOT-RES",
+                "source_route_name": f"Central Depot Standby Reserve ({dst_bus_type})",
+                "source_service_class": dst_class,
+                "recommended_bus_type": dst_bus_type,
+                "seats_relieved": int(pax_relieved),
+                "feasibility": "FEASIBLE",
+                "allocation_type": "Depot Reserve Dispatch",
+                "reason": f"Dispatches 1 standby {dst_bus_type} reserve bus ({dst_cap_per_bus} seats) from Central Staging Depot directly to {dst_rid} to relieve {dst_shortage:.0f} pax shortage without reducing service on any active line.",
+                "constraints_checked": "Depot reserve available; vehicle type compatible; zero degradation to other routes.",
+                "approval_status": "Pending Operator Approval"
+            })
+            rec_counter += 1
+            matched = True
+            continue
+
+        # If no donor and no reserve found, log transparently as REJECTED with specific operational reason
+        if not matched:
+            rejection_reason = "No surplus bus available on adjacent lines and depot reserves exhausted."
+            if dst_class == "Intercity" and dst_bus_type == "AC":
+                rejection_reason = "No surplus AC coach available in network; cross-class replacement with Sleeper/Normal prohibited."
+            elif dst_class == "Intercity" and dst_bus_type == "Sleeper":
+                rejection_reason = "No surplus Sleeper coach available; standard seating bus prohibited for night intercity route."
+
+            recommendations.append({
+                "recommendation_id": f"REC-{rec_counter:03d}",
+                "target_route_id": dst_rid,
+                "target_route_name": dst["route_name"],
+                "target_service_class": dst_class,
+                "predicted_shortage": round(dst_shortage),
+                "source_route_id": "None",
+                "source_route_name": "No Surplus / Depot Empty",
+                "source_service_class": dst_class,
+                "recommended_bus_type": dst_bus_type,
+                "seats_relieved": 0,
+                "feasibility": "REJECTED",
+                "allocation_type": "None",
+                "reason": rejection_reason,
+                "constraints_checked": "Constraint violated: Lack of compatible vehicle or all donor lines at minimum-service limit.",
+                "approval_status": "Rejected by System"
+            })
+            rec_counter += 1
+
+    feasible_count = sum(1 for r in recommendations if r["feasibility"] == "FEASIBLE")
+
     return {
-        "parameters": {
-            "demand_multiplier": req.demand_multiplier,
-            "disruption_level": req.disruption_level,
-            "effective_multiplier": round(effective_mult, 2),
-            "fleet_adjustment": req.fleet_adjustment
-        },
         "summary": {
-            "total_simulated_demand": round(total_sim_demand),
-            "total_base_capacity": round(total_base_capacity),
-            "simulated_deficit": round(sum(x["shortage"] for x in sim_results), 1),
-            "average_network_stress": round(total_sim_demand / max(1.0, total_base_capacity), 2)
+            "deficit_routes_identified": len(deficit_routes),
+            "feasible_recommendations": feasible_count,
+            "rejected_recommendations": len(recommendations) - feasible_count,
+            "total_shortage_addressed": sum(r["seats_relieved"] for r in recommendations if r["feasibility"] == "FEASIBLE"),
+            "status_label": "OPTIMAL DISPATCH READY" if feasible_count > 0 else "NO FEASIBLE REALLOCATION"
         },
-        "corridors": sim_results
+        "fleet_surplus_analysis": fleet_surplus_analysis,
+        "recommendations": recommendations,
+        "all_routes": routes
     }
 
-@app.get("/api/model_audit")
-def get_model_audit():
-    """Provides complete ML model performance metrics, feature importances, test residuals, and chronological split governance."""
-    # Held-out test set residual error distribution (Cutoff: 2026-10-20, 17,374 test rows)
-    residual_bins = ['-44 to -36', '-36 to -29', '-29 to -21', '-21 to -14', '-14 to -6', '-6 to 1', '1 to 9', '9 to 16', '16 to 24', '24 to 31']
-    residual_counts = [3, 25, 131, 408, 1749, 8653, 5357, 727, 77, 6]
-    
-    # 35 representative held-out test set predicted vs actual pairs (passenger count/hr)
-    sample_scatter = [
-        {"actual": 15, "predicted": 16.2}, {"actual": 22, "predicted": 21.8}, {"actual": 34, "predicted": 32.5},
-        {"actual": 48, "predicted": 45.1}, {"actual": 60, "predicted": 58.4}, {"actual": 75, "predicted": 72.8},
-        {"actual": 88, "predicted": 84.6}, {"actual": 105, "predicted": 102.3}, {"actual": 120, "predicted": 123.7},
-        {"actual": 140, "predicted": 136.2}, {"actual": 155, "predicted": 158.0}, {"actual": 172, "predicted": 169.5},
-        {"actual": 190, "predicted": 184.2}, {"actual": 210, "predicted": 204.8}, {"actual": 225, "predicted": 229.1},
-        {"actual": 240, "predicted": 236.4}, {"actual": 260, "predicted": 254.7}, {"actual": 280, "predicted": 277.2},
-        {"actual": 295, "predicted": 302.1}, {"actual": 315, "predicted": 308.9}, {"actual": 330, "predicted": 334.6},
-        {"actual": 350, "predicted": 342.8}, {"actual": 375, "predicted": 368.5}, {"actual": 390, "predicted": 395.2},
-        {"actual": 410, "predicted": 403.6}, {"actual": 435, "predicted": 427.1}, {"actual": 460, "predicted": 454.8},
-        {"actual": 485, "predicted": 491.3}, {"actual": 510, "predicted": 502.4}, {"actual": 535, "predicted": 529.7},
-        {"actual": 560, "predicted": 568.2}, {"actual": 590, "predicted": 582.4}, {"actual": 620, "predicted": 612.9},
-        {"actual": 650, "predicted": 644.2}, {"actual": 680, "predicted": 672.8}
-    ]
+class ApprovalRequest(BaseModel):
+    recommendation_id: str
+    operator_notes: Optional[str] = "Approved by transport controller"
 
+@app.post("/api/allocation/approve")
+def approve_recommendation(req: ApprovalRequest):
+    """Logs authorized operator approval of a proposed bus movement."""
+    entry = {
+        "recommendation_id": req.recommendation_id,
+        "approved": True,
+        "notes": req.operator_notes,
+        "status": "APPROVED_BY_OPERATOR"
+    }
+    APPROVED_DIRECTIVES.append(entry)
     return {
-        "bunching_classifier": {
-            "model_type": "RandomForestClassifier (Binary Classification)",
-            "task": "Predict next-hour bus bunching risk (0 = Normal, 1 = Bunching Alert)",
-            "n_estimators": 150,
-            "max_depth": 10,
-            "roc_auc": 0.9550,
-            "recall": 0.8471,
-            "precision": 0.8210,
-            "accuracy": 0.8869,
-            "f1_score": 0.8338,
-            "confusion_matrix": {
-                "true_negative": 6532,
-                "false_positive": 829,
-                "false_negative": 13,
-                "true_positive": 72
-            },
-            "feature_importance": [
-                {"feature": "mean_scheduled_headway_min", "importance": 0.333},
-                {"feature": "min_scheduled_headway_min", "importance": 0.295},
-                {"feature": "buses_scheduled", "importance": 0.088},
-                {"feature": "hour_of_day", "importance": 0.084},
-                {"feature": "corridor_type_intercity", "importance": 0.052},
-                {"feature": "month", "importance": 0.015},
-                {"feature": "seasonal_scenario_flag", "importance": 0.012}
-            ]
-        },
-        "demand_regressor": {
-            "model_type": "RandomForestRegressor (Continuous Regression)",
-            "task": "Predict next-hour passenger demand count across corridor",
-            "n_estimators": 200,
-            "mae": 4.37,
-            "rmse": 6.24,
-            "r2_score": 0.8002,
-            "baseline_mae": 7.57,
-            "baseline_rmse": 10.22,
-            "error_reduction_vs_baseline_pct": 42.2,
-            "feature_importance": [
-                {"feature": "passenger_count_synthetic (hourly lag)", "importance": 0.546},
-                {"feature": "hour_of_day", "importance": 0.208},
-                {"feature": "corridor_type_commuter", "importance": 0.033},
-                {"feature": "total_capacity_available", "importance": 0.029},
-                {"feature": "buses_scheduled", "importance": 0.028},
-                {"feature": "corridor_type_intercity", "importance": 0.025},
-                {"feature": "is_weekend", "importance": 0.015},
-                {"feature": "month", "importance": 0.014}
-            ],
-            "residual_distribution": {
-                "bins": residual_bins,
-                "counts": residual_counts,
-                "mean_error": 0.12,
-                "mae": 4.37,
-                "std_error": 6.24
-            },
-            "test_sample_scatter": sample_scatter
-        },
-        "governance": {
-            "validation_split_method": "Chronological Out-of-Time Split (80% Train, 20% Test)",
-            "cutoff_date": "2026-10-20",
-            "training_period": "2026-01-01 to 2026-10-20 (69,496 rows)",
-            "validation_period": "2026-10-21 to 2026-12-31 (17,374 rows)",
-            "look_ahead_leakage": "Zero (Strictly chronological, future data barred during training)",
-            "data_provenance": "Synthetic Transit Dataset Benchmarked for Tamil Nadu State Transport",
-            "status": "Validated for 2027 Inference Deployment"
-        }
+        "success": True,
+        "message": f"Recommendation {req.recommendation_id} successfully marked as APPROVED.",
+        "directive": entry
     }
 
-# Mount static directory for frontend
-os.makedirs("static", exist_ok=True)
-os.makedirs("static/css", exist_ok=True)
-os.makedirs("static/js", exist_ok=True)
+class ManualAllocationRequest(BaseModel):
+    source_id: str
+    target_route_id: str
+    buses_to_shift: int = 1
+    date: str = "2026-01-01"
+    hour: int = 8
+    operator_notes: Optional[str] = "Manual dispatch override by controller"
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
+@app.post("/api/allocation/manual")
+def manual_bus_allocation(req: ManualAllocationRequest):
+    """
+    Allows a transit operator to manually shift a bus from a surplus route or depot reserve
+    to a destination route, validating all operational constraints.
+    """
+    dst_rid = req.target_route_id
+    if dst_rid not in ROUTE_INFO:
+        raise HTTPException(status_code=400, detail=f"Target route '{dst_rid}' not found in network.")
+
+    dst_meta = ROUTE_INFO[dst_rid]
+    src_id = req.source_id
+
+    # Case A: Dispatch from Central Depot Reserve
+    if src_id.startswith("DEPOT-RES"):
+        res_bus_type = "Normal"
+        if "AC" in src_id or dst_meta["bus_type"] == "AC":
+            res_bus_type = "AC"
+        elif "Sleeper" in src_id or dst_meta["bus_type"] == "Sleeper":
+            res_bus_type = "Sleeper"
+
+        if dst_meta["service_class"] == "Intercity" and res_bus_type != dst_meta["bus_type"]:
+            return {
+                "success": False,
+                "message": f"Incompatible Vehicle: Cannot assign {res_bus_type} reserve to {dst_meta['bus_type']} intercity corridor {dst_rid}."
+            }
+
+        directive = {
+            "directive_id": f"MANUAL-{len(APPROVED_DIRECTIVES)+1:03d}",
+            "type": "Manual Depot Reserve Dispatch",
+            "source": f"Central Staging Depot ({res_bus_type})",
+            "target": f"{dst_rid} - {dst_meta['route_name']}",
+            "buses_shifted": req.buses_to_shift,
+            "bus_type": res_bus_type,
+            "status": "EXECUTED",
+            "notes": req.operator_notes
+        }
+        APPROVED_DIRECTIVES.append(directive)
+        return {
+            "success": True,
+            "message": f"Successfully dispatched {req.buses_to_shift} {res_bus_type} reserve bus(es) to {dst_rid}.",
+            "directive": directive
+        }
+
+    # Case B: Route-to-Route Manual Transfer
+    if src_id not in ROUTE_INFO:
+        raise HTTPException(status_code=400, detail=f"Source route '{src_id}' not found.")
+
+    if src_id == dst_rid:
+        return {"success": False, "message": "Source and destination routes cannot be identical."}
+
+    src_meta = ROUTE_INFO[src_id]
+
+    # Validate Vehicle Compatibility
+    if dst_meta["service_class"] == "Intercity" and (src_meta["service_class"] != "Intercity" or src_meta["bus_type"] != dst_meta["bus_type"]):
+        return {
+            "success": False,
+            "message": f"Constraint Violated: Cannot shift {src_meta['bus_type']} bus from {src_id} ({src_meta['service_class']}) to {dst_meta['bus_type']} corridor {dst_rid} ({dst_meta['service_class']})."
+        }
+
+    if dst_meta["service_class"] == "Local" and src_meta["service_class"] != "Local":
+        return {
+            "success": False,
+            "message": f"Constraint Violated: Cannot shift {src_meta['service_class']} bus to Local city service {dst_rid}."
+        }
+
+    # Validate Distance
+    if abs(src_meta["distance_km"] - dst_meta["distance_km"]) > 60.0:
+        return {
+            "success": False,
+            "message": f"Constraint Violated: Distance repositioning exceeds 60 km limit ({abs(src_meta['distance_km'] - dst_meta['distance_km']):.1f} km difference)."
+        }
+
+    # Validate Minimum Service
+    if (src_meta["base_buses"] - req.buses_to_shift) < src_meta["minimum_service_bus_count"]:
+        return {
+            "success": False,
+            "message": f"Constraint Violated: Shifting {req.buses_to_shift} bus(es) would drop {src_id} below statutory minimum service ({src_meta['minimum_service_bus_count']} buses)."
+        }
+
+    directive = {
+        "directive_id": f"MANUAL-{len(APPROVED_DIRECTIVES)+1:03d}",
+        "type": "Manual Route-to-Route Shift",
+        "source": f"{src_id} - {src_meta['route_name']}",
+        "target": f"{dst_rid} - {dst_meta['route_name']}",
+        "buses_shifted": req.buses_to_shift,
+        "bus_type": src_meta["bus_type"],
+        "status": "EXECUTED",
+        "notes": req.operator_notes
+    }
+    APPROVED_DIRECTIVES.append(directive)
+    return {
+        "success": True,
+        "message": f"Successfully shifted {req.buses_to_shift} {src_meta['bus_type']} bus(es) from {src_id} to {dst_rid}.",
+        "directive": directive
+    }
+def approve_recommendation(req: ApprovalRequest):
+    """Logs authorized operator approval of a proposed bus movement."""
+    entry = {
+        "recommendation_id": req.recommendation_id,
+        "approved": True,
+        "notes": req.operator_notes,
+        "status": "APPROVED_BY_OPERATOR"
+    }
+    APPROVED_DIRECTIVES.append(entry)
+    return {
+        "success": True,
+        "message": f"Recommendation {req.recommendation_id} successfully marked as APPROVED.",
+        "directive": entry
+    }
+
+# ---------------------------------------------------------
+# 6. WHAT-IF & EMERGENCY SCENARIO SIMULATOR
+# ---------------------------------------------------------
+class SimulatorRequest(BaseModel):
+    scenario_type: str # "breakdown", "booth_request", "vip_traffic", "constrained_routes"
+    route_id: str
+    hour: int = 8
+    date: str = "2026-01-01"
+    bus_type: str = "Normal"
+    count: int = 1
+    stranded_pax: int = 40
+    delay_multiplier: float = 1.3
+
+@app.post("/api/simulate")
+def run_what_if_simulation(req: SimulatorRequest):
+    """
+    Interactive What-If & Emergency Scenario simulator.
+    Kept strictly isolated from historical ML training data.
+    """
+    rid = req.route_id
+    r_meta = ROUTE_INFO.get(rid, {})
+
+    if req.scenario_type == "breakdown":
+        # Scenario A: Sudden Bus Breakdown
+        base_cap = r_meta.get("capacity_per_bus", 50)
+        lost_cap = req.count * base_cap
+        
+        # Search for compatible spare
+        replacement_options = []
+        for other_id, meta in ROUTE_INFO.items():
+            if other_id != rid and meta["bus_type"] == req.bus_type and meta["service_class"] == r_meta.get("service_class"):
+                replacement_options.append({
+                    "donor_route_id": other_id,
+                    "donor_name": meta["route_name"],
+                    "available_bus_type": meta["bus_type"],
+                    "estimated_arrival_minutes": int(meta["distance_km"] * 0.8) if meta["service_class"] == "Local" else 25
+                })
+
+        return {
+            "scenario": "Sudden Bus Breakdown",
+            "affected_route": f"{rid} - {r_meta.get('route_name', rid)}",
+            "unavailable_buses": req.count,
+            "bus_type": req.bus_type,
+            "lost_seat_capacity": lost_cap,
+            "compatible_replacements_found": len(replacement_options),
+            "options": replacement_options[:3],
+            "action_advice": f"Deploy 1 {req.bus_type} from {replacement_options[0]['donor_route_id'] if replacement_options else 'Central Reserve Depot'}." if replacement_options else "No compatible bus on nearby route. Request auxiliary depot reserve.",
+            "data_isolation_notice": "Simulation output only. Historical dataset remains unmodified."
+        }
+
+    elif req.scenario_type == "booth_request":
+        # Scenario B: Control Booth Emergency Request
+        return {
+            "scenario": "Control Booth Emergency Request (Stranded Passengers)",
+            "route": f"{rid} - {r_meta.get('route_name', rid)}",
+            "stranded_passengers": req.stranded_pax,
+            "urgency": "High",
+            "feasible_response": f"Dispatch 1 auxiliary {req.bus_type} bus from nearest staging depot to clear backlog ({req.stranded_pax} passengers).",
+            "status": "Simulation Active",
+            "data_isolation_notice": "Simulated dispatch advisory. No automated real-world movement triggered."
+        }
+
+    elif req.scenario_type == "vip_traffic":
+        # Scenario C: VIP / CM Visit or Traffic Restriction
+        sim_delay = round(12.0 * req.delay_multiplier, 1)
+        return {
+            "scenario": "VIP Visit / Road Restriction Simulation",
+            "affected_corridor": f"{rid} - {r_meta.get('route_name', rid)}",
+            "traffic_delay_multiplier": f"+{(req.delay_multiplier - 1.0)*100:.0f}%",
+            "projected_headway_delay": f"{sim_delay} minutes",
+            "bunching_risk_elevation": "HIGH (Headway decay probability elevated to ~85%)",
+            "recommended_dispatch_mitigation": "Hold departures at origin terminal by 4 minutes to prevent in-transit vehicle clustering.",
+            "data_isolation_notice": "Simulation calculation only."
+        }
+
+    else:
+        # Scenario D: Operationally Constrained Routes
+        return {
+            "scenario": "Operationally Constrained Routes Audit",
+            "route": f"{rid} - {r_meta.get('route_name', rid)}",
+            "minimum_service_limit": r_meta.get("minimum_service_bus_count", 2),
+            "base_fleet": r_meta.get("base_buses", 5),
+            "constraint_assessment": "This corridor is restricted from releasing vehicles during peak hours because doing so would breach the statutory minimum service frequency.",
+            "feasible_alternative": "Maintain static schedule; deploy depot reserve only if demand surpasses 150% capacity."
+        }
+
+# ---------------------------------------------------------
+# 7. SERVE STATIC ASSETS & FRONTEND
+# ---------------------------------------------------------
+os.makedirs(os.path.join(BASE_DIR, "static"), exist_ok=True)
+os.makedirs(os.path.join(BASE_DIR, "static", "css"), exist_ok=True)
+os.makedirs(os.path.join(BASE_DIR, "static", "js"), exist_ok=True)
+
+app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
 
 @app.get("/")
-def serve_index():
-    return FileResponse("static/index.html")
+def serve_dashboard():
+    return FileResponse(os.path.join(BASE_DIR, "static", "index.html"))
 
 if __name__ == "__main__":
     import uvicorn

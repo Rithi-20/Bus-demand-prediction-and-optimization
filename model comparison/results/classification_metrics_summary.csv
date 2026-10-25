@@ -1,0 +1,4 @@
+Model,Accuracy (%),Precision (%),Recall (%),F1-Score,F1 (Macro),ROC-AUC Score
+Logistic Regression,99.68,89.62,100.0,0.9453,0.9718,1.0
+Decision Tree Classifier,100.0,100.0,100.0,1.0,1.0,1.0
+Random Forest Classifier,100.0,100.0,100.0,1.0,1.0,1.0

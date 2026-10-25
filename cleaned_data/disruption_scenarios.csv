@@ -1,0 +1,3 @@
+﻿scenario_id,scenario_type,route_id,start_date,end_date,start_time,end_time,recurrence,description,is_real_incident
+BRIDGE_R02_2026,bridge_construction,R02,2026-07-01,2026-12-31,06:00,22:59,daily,Fictional six-month bridge works; moderate delays and some capacity constraints,0
+TRAFFIC_L02_2026,recurring_traffic,L02,2026-01-01,2026-12-31,08:00,09:59,Monday-Friday; also 17:00-18:59,"Simulated recurring weekday commute congestion, with second time window 17:00-18:59",0

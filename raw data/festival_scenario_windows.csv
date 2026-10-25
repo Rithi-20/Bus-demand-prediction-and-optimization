@@ -1,0 +1,16 @@
+﻿event_name,start_date,end_date,phase,local_multiplier,regional_multiplier,intercity_multiplier,source_type,notes
+Pongal,2026-01-12,2026-01-14,outbound,1.18,1.46,1.65,synthetic demand assumption,Holiday dates official; travel windows and multipliers simulated
+Pongal,2026-01-15,2026-01-17,holiday,0.91,1.2,1.32,synthetic demand assumption,Holiday dates official; travel windows and multipliers simulated
+Pongal,2026-01-18,2026-01-19,return,1.11,1.48,1.67,synthetic demand assumption,Holiday dates official; travel windows and multipliers simulated
+Ramzan (Eid al-Fitr),2026-03-19,2026-03-20,outbound,1.1,1.26,1.33,synthetic demand assumption,Holiday dates official; travel windows and multipliers simulated
+Ramzan (Eid al-Fitr),2026-03-21,2026-03-21,holiday,0.95,1.18,1.21,synthetic demand assumption,Holiday dates official; travel windows and multipliers simulated
+Ramzan (Eid al-Fitr),2026-03-22,2026-03-23,return,1.1,1.25,1.34,synthetic demand assumption,Holiday dates official; travel windows and multipliers simulated
+Bakrid (Eid al-Adha),2026-05-26,2026-05-27,outbound,1.1,1.25,1.34,synthetic demand assumption,Holiday dates official; travel windows and multipliers simulated
+Bakrid (Eid al-Adha),2026-05-28,2026-05-28,holiday,0.94,1.17,1.24,synthetic demand assumption,Holiday dates official; travel windows and multipliers simulated
+Bakrid (Eid al-Adha),2026-05-29,2026-05-30,return,1.09,1.25,1.34,synthetic demand assumption,Holiday dates official; travel windows and multipliers simulated
+Ayudha Pooja / Vijayadashami,2026-10-16,2026-10-18,outbound,1.14,1.42,1.56,synthetic demand assumption,Holiday dates official; travel windows and multipliers simulated
+Ayudha Pooja / Vijayadashami,2026-10-19,2026-10-20,holiday,0.9,1.17,1.31,synthetic demand assumption,Holiday dates official; travel windows and multipliers simulated
+Ayudha Pooja / Vijayadashami,2026-10-21,2026-10-22,return,1.13,1.41,1.56,synthetic demand assumption,Holiday dates official; travel windows and multipliers simulated
+Deepavali,2026-11-05,2026-11-07,outbound,1.18,1.56,1.78,synthetic demand assumption,Holiday dates official; travel windows and multipliers simulated
+Deepavali,2026-11-08,2026-11-08,holiday,0.93,1.27,1.37,synthetic demand assumption,Holiday dates official; travel windows and multipliers simulated
+Deepavali,2026-11-09,2026-11-10,return,1.15,1.55,1.74,synthetic demand assumption,Holiday dates official; travel windows and multipliers simulated

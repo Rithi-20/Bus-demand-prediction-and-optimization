@@ -1,4 +1,0 @@
-disruption_scenario,start_date_synthetic,end_date_synthetic,delay_multiplier_synthetic,demand_multiplier_synthetic,data_type,data_source_note,combination_rule
-monsoon_rain_scenario,2026-10-01,2026-10-12,1.2,1.12,SYNTHETIC_SCENARIO,"Injected stress-test scenario, not a claim that an actual event occurred.",Multiply active seasonal and disruption multipliers; cap combined demand multiplier at 2.0
-roadworks_congestion_scenario,2026-06-08,2026-06-14,1.28,1.0,SYNTHETIC_SCENARIO,"Injected stress-test scenario, not a claim that an actual event occurred.",Multiply active seasonal and disruption multipliers; cap combined demand multiplier at 2.0
-major_event_crowd_scenario,2026-08-28,2026-09-02,1.18,1.15,SYNTHETIC_SCENARIO,"Injected stress-test scenario, not a claim that an actual event occurred.",Multiply active seasonal and disruption multipliers; cap combined demand multiplier at 2.0

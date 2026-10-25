@@ -1,0 +1,4 @@
+Model,MAE (pax),RMSE (pax),MAPE (%),R2 Score
+Linear Regression,23.41,30.41,24.74,0.7486
+Decision Tree Regressor,8.38,11.71,7.2,0.9627
+Random Forest Regressor,8.09,11.16,6.96,0.9662

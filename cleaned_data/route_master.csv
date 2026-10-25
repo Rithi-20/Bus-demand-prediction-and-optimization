@@ -1,0 +1,13 @@
+﻿route_id,route_name,service_class,origin,destination,distance_km,bus_type,capacity_per_bus,base_buses,minimum_service_bus_count,scenario_profile
+L01,Coimbatore Gandhipuram - Ukkadam,Local,Gandhipuram,Ukkadam,9,Normal,55,5,2,standard
+L02,Coimbatore Gandhipuram - Peelamedu,Local,Gandhipuram,Peelamedu,12,Normal,55,6,3,recurring_traffic
+L03,Coimbatore Ukkadam - Singanallur,Local,Ukkadam,Singanallur,14,Normal,55,5,2,standard
+L04,Coimbatore Gandhipuram - Saravanampatti,Local,Gandhipuram,Saravanampatti,16,Normal,55,6,3,standard
+L05,Coimbatore Town Hall - Vadavalli,Local,Town Hall,Vadavalli,13,Normal,55,5,2,standard
+L06,Coimbatore Ukkadam - Podanur,Local,Ukkadam,Podanur,11,Normal,55,5,2,standard
+R01,Coimbatore - Pollachi,Regional,Coimbatore,Pollachi,43,Normal,52,4,2,standard
+R02,Coimbatore - Mettupalayam,Regional,Coimbatore,Mettupalayam,39,Normal,52,4,2,bridge_construction
+R03,Coimbatore - Tiruppur,Regional,Coimbatore,Tiruppur,55,Normal,52,4,2,standard
+I01,Coimbatore - Chennai (AC),Intercity,Coimbatore,Chennai,505,AC,40,2,1,standard
+I02,Coimbatore - Madurai (Normal),Intercity,Coimbatore,Madurai,215,Normal,48,3,1,standard
+I03,Coimbatore - Bengaluru (Sleeper),Intercity,Coimbatore,Bengaluru,365,Sleeper,32,2,1,standard

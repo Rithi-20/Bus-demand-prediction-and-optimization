@@ -1,9 +1,0 @@
-SOURCES AND LIMITATIONS — CORRECTED V2
-
-Public context references:
-- TNSTC online booking / destination context: https://www.tnstc.in/OTRSOnline/index.html
-- TNSTC special services: https://www.tnstc.in/inner_pages_2024/specialservices.html
-- MTC route-wise information: https://mtcbus.tn.gov.in/Home/routewiseinfo
-- MTC bus timing lookup: https://mtcbus.tn.gov.in/Home/bustypetimingsearch
-
-These links provide context only. The dataset does not claim that each corridor is an official route or that generated schedules match published schedules. All counts, delays, capacities, scenario multipliers, labels, and allocations are synthetic.
