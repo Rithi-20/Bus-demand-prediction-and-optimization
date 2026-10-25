@@ -27,52 +27,105 @@ app.add_middleware(
 )
 
 # ---------------------------------------------------------
-# 1. LOAD MODELS & DATASETS
+# 1. LOAD MODELS & DATASETS (Optimized Memory Footprint)
 # ---------------------------------------------------------
+import gc
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, "cleaned_data")
 
-# Load Datasets from cleaned_data/
 ROUTES_DF = pd.read_csv(os.path.join(DATA_DIR, "route_master.csv"))
-DEMAND_DF = pd.read_csv(os.path.join(DATA_DIR, "hourly_demand_operations.csv"), low_memory=False)
-TRIPS_DF = pd.read_csv(os.path.join(DATA_DIR, "trip_operations.csv"), low_memory=False)
-CALENDAR_DF = pd.read_csv(os.path.join(DATA_DIR, "calendar_events.csv"))
 
-# Clean and normalize service_class strings
-for df in [ROUTES_DF, DEMAND_DF, TRIPS_DF]:
-    if "service_class" in df.columns:
-        df["service_class"] = df["service_class"].astype(str).str.strip()
-    if "route_id" in df.columns:
-        df["route_id"] = df["route_id"].astype(str).str.strip()
-    if "bus_type" in df.columns:
-        df["bus_type"] = df["bus_type"].astype(str).str.strip()
+demand_cols = [
+    'date', 'hour_int', 'route_id', 'service_class', 'bus_type',
+    'day_of_week', 'is_weekend', 'is_friday', 'is_peak_hour',
+    'holiday_flag', 'rainfall_mm', 'construction_active',
+    'scheduled_bus_count', 'available_bus_count', 'reserve_bus_count',
+    'minimum_service_bus_count', 'total_capacity', 'passenger_demand',
+    'capacity_shortage', 'scheduled_headway_min',
+    'mean_actual_headway_min', 'mean_departure_delay_min'
+]
+demand_dtypes = {
+    'date': 'category',
+    'hour_int': 'int8',
+    'is_weekend': 'int8',
+    'is_friday': 'int8',
+    'is_peak_hour': 'int8',
+    'holiday_flag': 'int8',
+    'construction_active': 'int8',
+    'rainfall_mm': 'float32',
+    'scheduled_bus_count': 'int8',
+    'available_bus_count': 'int8',
+    'reserve_bus_count': 'int8',
+    'minimum_service_bus_count': 'int8',
+    'total_capacity': 'int16',
+    'passenger_demand': 'float32',
+    'capacity_shortage': 'float32',
+    'scheduled_headway_min': 'float32',
+    'mean_actual_headway_min': 'float32',
+    'mean_departure_delay_min': 'float32',
+    'route_id': 'category',
+    'service_class': 'category',
+    'bus_type': 'category'
+}
 
 # Day of week mapping
 DAY_MAP = {'Monday': 0, 'Tuesday': 1, 'Wednesday': 2, 'Thursday': 3, 'Friday': 4, 'Saturday': 5, 'Sunday': 6}
 
-# Load Saved Machine Learning Models
+DEMAND_DF = pd.read_csv(os.path.join(DATA_DIR, "hourly_demand_operations.csv"), usecols=demand_cols, dtype=demand_dtypes)
+DEMAND_DF["day_of_week"] = DEMAND_DF["day_of_week"].map(DAY_MAP).fillna(0).astype("int8")
+
+trip_cols = [
+    'trip_id', 'date', 'hour_int', 'route_id', 'service_class', 'bus_type',
+    'scheduled_departure', 'actual_departure', 'scheduled_headway_min',
+    'actual_headway_min', 'departure_delay_min', 'headway_deviation_min', 'headway_ratio'
+]
+trip_dtypes = {
+    'date': 'category',
+    'hour_int': 'int8',
+    'scheduled_headway_min': 'float32',
+    'actual_headway_min': 'float32',
+    'departure_delay_min': 'float32',
+    'headway_deviation_min': 'float32',
+    'headway_ratio': 'float32',
+    'route_id': 'category',
+    'service_class': 'category',
+    'bus_type': 'category'
+}
+TRIPS_DF = pd.read_csv(os.path.join(DATA_DIR, "trip_operations.csv"), usecols=trip_cols, dtype=trip_dtypes)
+CALENDAR_DF = pd.read_csv(os.path.join(DATA_DIR, "calendar_events.csv"))
+
+gc.collect()
+
+# Machine Learning Model Paths & Lazy Loaders (Prevents Render OOM on startup)
 RF_CLASSIFIER_PATH = os.path.join(BASE_DIR, "models", "classification", "random_forest_classifier.joblib")
 RF_REGRESSOR_PATH = os.path.join(BASE_DIR, "models", "regression", "random_forest_regressor.joblib")
 
-RF_CLASSIFIER = None
-RF_REGRESSOR = None
+_RF_CLASSIFIER = None
+_RF_REGRESSOR = None
 
-if os.path.exists(RF_CLASSIFIER_PATH):
-    try:
-        RF_CLASSIFIER = joblib.load(RF_CLASSIFIER_PATH)
-        print(f"[ML] Successfully loaded Bunching Classifier from {RF_CLASSIFIER_PATH}")
-    except Exception as e:
-        print(f"[ML ERROR] Could not load Bunching Classifier: {e}")
+def get_bunching_classifier():
+    global _RF_CLASSIFIER
+    if _RF_CLASSIFIER is None and os.path.exists(RF_CLASSIFIER_PATH):
+        try:
+            _RF_CLASSIFIER = joblib.load(RF_CLASSIFIER_PATH)
+            print(f"[ML] Successfully loaded Bunching Classifier from {RF_CLASSIFIER_PATH}")
+        except Exception as e:
+            print(f"[ML ERROR] Could not load Bunching Classifier: {e}")
+    return _RF_CLASSIFIER
 
-if os.path.exists(RF_REGRESSOR_PATH):
-    try:
-        RF_REGRESSOR = joblib.load(RF_REGRESSOR_PATH)
-        print(f"[ML] Successfully loaded Demand Regressor from {RF_REGRESSOR_PATH}")
-    except Exception as e:
-        print(f"[ML ERROR] Could not load Demand Regressor: {e}")
+def get_demand_regressor():
+    global _RF_REGRESSOR
+    if _RF_REGRESSOR is None and os.path.exists(RF_REGRESSOR_PATH):
+        try:
+            _RF_REGRESSOR = joblib.load(RF_REGRESSOR_PATH)
+            print(f"[ML] Successfully loaded Demand Regressor from {RF_REGRESSOR_PATH}")
+        except Exception as e:
+            print(f"[ML ERROR] Could not load Demand Regressor: {e}")
+    return _RF_REGRESSOR
 
-AVAILABLE_DATES = sorted(DEMAND_DF["date"].unique().tolist())
-AVAILABLE_HOURS = sorted(DEMAND_DF["hour_int"].unique().tolist())
+AVAILABLE_DATES = sorted([str(d) for d in DEMAND_DF["date"].unique().tolist()])
+AVAILABLE_HOURS = sorted([int(h) for h in DEMAND_DF["hour_int"].unique().tolist()])
 APPROVED_DIRECTIVES: List[Dict[str, Any]] = []
 
 # Route metadata lookup dictionary
@@ -152,10 +205,11 @@ def get_bunching_prediction(
     bunching_count = 0
     total_trips = len(matched_trips)
 
-    if not matched_trips.empty and RF_CLASSIFIER is not None:
+    clf = get_bunching_classifier()
+    if not matched_trips.empty and clf is not None:
         # Prepare exact feature columns used during model training
         # Features: ['hour_int', 'scheduled_headway_min', 'actual_headway_min', 'departure_delay_min', 'headway_deviation_min', 'headway_ratio']
-        feat_cols = getattr(RF_CLASSIFIER, "feature_names_in_", [
+        feat_cols = getattr(clf, "feature_names_in_", [
             'hour_int', 'scheduled_headway_min', 'actual_headway_min',
             'departure_delay_min', 'headway_deviation_min', 'headway_ratio'
         ])
@@ -171,8 +225,8 @@ def get_bunching_prediction(
             matched_trips["delay_ratio"] = matched_trips["departure_delay_min"] / np.maximum(1.0, matched_trips["scheduled_headway_min"])
 
         X_eval = matched_trips[feat_cols].copy().fillna(0)
-        preds = RF_CLASSIFIER.predict(X_eval)
-        probas = RF_CLASSIFIER.predict_proba(X_eval)[:, 1]
+        preds = clf.predict(X_eval)
+        probas = clf.predict_proba(X_eval)[:, 1]
 
         for i, (_, row) in enumerate(matched_trips.iterrows()):
             rid = row["route_id"]
@@ -299,9 +353,10 @@ def get_demand_prediction(
     total_shortage = 0.0
     shortage_routes_count = 0
 
-    if not matched_demand.empty and RF_REGRESSOR is not None:
+    reg = get_demand_regressor()
+    if not matched_demand.empty and reg is not None:
         # Prepare exact feature columns used during model training
-        feat_cols = getattr(RF_REGRESSOR, "feature_names_in_", [
+        feat_cols = getattr(reg, "feature_names_in_", [
             'hour_int', 'hour_sin', 'hour_cos', 'day_of_week',
             'is_weekend', 'is_friday', 'is_peak_hour', 'holiday_flag',
             'rainfall_mm', 'construction_active',
@@ -319,7 +374,7 @@ def get_demand_prediction(
             matched_demand["day_of_week"] = matched_demand["day_of_week"].map(DAY_MAP).fillna(0).astype(int)
 
         X_eval = matched_demand[feat_cols].copy().fillna(0)
-        preds = RF_REGRESSOR.predict(X_eval)
+        preds = reg.predict(X_eval)
 
         for i, (_, row) in enumerate(matched_demand.iterrows()):
             rid = row["route_id"]
@@ -843,6 +898,10 @@ os.makedirs(os.path.join(BASE_DIR, "static", "css"), exist_ok=True)
 os.makedirs(os.path.join(BASE_DIR, "static", "js"), exist_ok=True)
 
 app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
+
+@app.get("/health")
+def health_check():
+    return {"status": "ok", "service": "online"}
 
 @app.get("/")
 def serve_dashboard():
